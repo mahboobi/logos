@@ -1,0 +1,10 @@
+# Nix / scaffold
+result
+result-*
+.scaffold/
+# Rust
+target/
+# Qt / build
+build/
+# macOS
+.DS_Store

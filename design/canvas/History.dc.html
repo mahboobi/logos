@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>History · version control</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F5F6F3}
+a{color:#0B6E4F}a:hover{color:#08523B}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-wrap: wrap; background: #F5F6F3; color: #15181C; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 14px; line-height: 1.45">
+
+<nav aria-label="Open Labbook" style="flex: 1 1 232px; box-sizing: border-box; padding: 20px 14px; background: #FFFFFF; border-right: 1px solid #DDE0DA; display: flex; flex-direction: column; gap: 24px">
+<div style="display: flex; align-items: center; gap: 10px; padding: 0 10px">
+<svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><rect x="0" y="0" width="28" height="28" rx="7" fill="#0B6E4F"></rect><rect x="8" y="8" width="12" height="2.5" rx="1.25" fill="#FFFFFF"></rect><rect x="8" y="13" width="12" height="2.5" rx="1.25" fill="#FFFFFF"></rect><rect x="8" y="18" width="7" height="2.5" rx="1.25" fill="#FFFFFF"></rect></svg>
+<div style="display: flex; flex-direction: column"><span style="font-weight: 600; font-size: 15px">Open Labbook</span><span style="font-size: 12px; color: #646B73">on Logos Basecamp</span></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span style="padding: 0 12px 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #646B73">This project</span>
+<a href="Main.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 8px; text-decoration: none; color: #15181C">Board</a>
+<a href="Entry.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 8px; text-decoration: none; color: #15181C">Notebook</a>
+<a href="Hypothesis.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 8px; text-decoration: none; color: #15181C">Hypotheses</a>
+<a href="Funding.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 8px; text-decoration: none; color: #15181C">Funding</a>
+<a href="Publish.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 8px; text-decoration: none; color: #15181C">Publish</a>
+<a href="History.dc.html" aria-current="page" style="display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 8px; text-decoration: none; background: #E3F1EB; color: #0B6E4F; font-weight: 600">History</a>
+<a href="Members.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 8px; text-decoration: none; color: #15181C">Members</a>
+</div>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span style="padding: 0 12px 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #646B73">Projects</span>
+<a href="Main.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 8px; text-decoration: none; color: #15181C; font-weight: 500">Thermostable lipase variants</a>
+<a href="Main.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 8px; text-decoration: none; color: #4C535C">Biofilm assay protocols</a>
+<a href="NewProject.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 8px; text-decoration: none; color: #0B6E4F; font-weight: 500">+ New project</a>
+</div>
+<div style="margin-top: auto; border: 1px solid #DDE0DA; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #4C535C">
+<div style="display: flex; align-items: center; gap: 8px"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: #0B6E4F"></span><span style="color: #15181C; font-weight: 500">Node online</span></div>
+<span>Logos testnet v0.3</span>
+<span>Synced with 3 of 4 members</span>
+</div>
+</nav>
+
+<main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 28px 32px 48px; display: flex; flex-direction: column; gap: 20px">
+
+<header style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 8px; max-width: 720px">
+<h1 style="margin: 0; font-size: 28px; line-height: 1.2; font-weight: 600; letter-spacing: -0.01em">History</h1>
+<p style="margin: 0; color: #4C535C; font-size: 15px">Every change is a signed commit. Branch to try something without touching the main record, then merge it after review. Commits are anchored on LEZ in batches.</p>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button type="button" style="min-height: 44px; padding: 0 18px; border-radius: 8px; border: 1px solid #C9CDC6; background: #FFFFFF; color: #15181C; font: inherit; font-weight: 500; cursor: pointer">Compare versions</button>
+<button type="button" style="min-height: 44px; padding: 0 18px; border-radius: 8px; border: 1px solid #0B6E4F; background: #0B6E4F; color: #FFFFFF; font: inherit; font-weight: 600; cursor: pointer">New branch</button>
+</div>
+</header>
+
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px">
+<label for="branch" style="font-size: 12px; font-weight: 500; color: #4C535C">Branch</label>
+<select id="branch" style="font: inherit; font-family: 'IBM Plex Mono', monospace; font-size: 13px; min-height: 44px; padding: 0 10px; border: 1px solid #C9CDC6; border-radius: 8px; background: #FFFFFF; color: #15181C"><option>main</option><option>h2-computational</option><option>alt-buffer (merged)</option></select>
+<label for="scope" style="font-size: 12px; font-weight: 500; color: #4C535C; margin-left: 8px">Idea</label>
+<select id="scope" style="font: inherit; min-height: 44px; padding: 0 10px; border: 1px solid #C9CDC6; border-radius: 8px; background: #FFFFFF; color: #15181C"><option>Deep mutational scan of the lid domain</option><option>All ideas in this project</option></select>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+
+<div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+
+<section aria-labelledby="log-h" style="background: #FFFFFF; border: 1px solid #DDE0DA; border-radius: 12px; padding: 8px 20px 12px; display: flex; flex-direction: column">
+<h2 id="log-h" style="margin: 12px 0 8px; font-size: 16px; font-weight: 600">Commits on main</h2>
+<ol style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column">
+
+<li style="display: flex; gap: 12px; align-items: stretch">
+<div aria-hidden="true" style="position: relative; width: 48px; flex: none"><span style="position: absolute; left: 11px; top: 50%; bottom: 0; width: 2px; background: #0B6E4F"></span><span style="position: absolute; left: 6px; top: calc(50% - 6px); width: 12px; height: 12px; border-radius: 50%; background: #FFFFFF; border: 2px solid #4B3FB0; box-sizing: border-box"></span></div>
+<div style="flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px 10px; margin: 2px 0; background: #ECEAFB; border-radius: 8px">
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 500; color: #4B3FB0">a41c9e2</span>
+<span style="flex: 1 1 240px; min-width: 0; font-weight: 500">Run 14: add plate 3 melt curves</span>
+<span style="font-size: 12px; font-weight: 500; padding: 2px 8px; border-radius: 999px; background: #FBEFD9; color: #8A4B00">Waiting for next anchor</span>
+<span style="font-size: 12px; color: #4C535C; width: 100%">Arjun Mehta · signed · 6 min ago · 1 record edited, 3 files added</span>
+</div>
+</li>
+
+<li style="display: flex; gap: 12px; align-items: stretch">
+<div aria-hidden="true" style="position: relative; width: 48px; flex: none"><span style="position: absolute; left: 11px; top: 0; bottom: 0; width: 2px; background: #0B6E4F"></span><span style="position: absolute; left: 6px; top: calc(50% - 6px); width: 12px; height: 12px; border-radius: 50%; background: #FFFFFF; border: 2px solid #0B6E4F; box-sizing: border-box"></span></div>
+<div style="flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px 10px; border-bottom: 1px solid #ECEEE9">
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 500; color: #4B3FB0">7d03b1f</span>
+<span style="flex: 1 1 240px; min-width: 0; font-weight: 500">Map dye and units to ontology terms (4 agent edits accepted)</span>
+<span style="font-size: 12px; font-weight: 500; padding: 2px 8px; border-radius: 999px; background: #E3F1EB; color: #0B6E4F">Batch 212</span>
+<span style="font-size: 12px; color: #4C535C; width: 100%">Labbook agent, run by Arjun Mehta · signed by both · 20 min ago</span>
+</div>
+</li>
+
+<li style="display: flex; gap: 12px; align-items: stretch">
+<div aria-hidden="true" style="position: relative; width: 48px; flex: none"><span style="position: absolute; left: 11px; top: 0; bottom: 0; width: 2px; background: #0B6E4F"></span><span style="position: absolute; left: 35px; top: 50%; bottom: 0; width: 2px; background: #4B3FB0"></span><span style="position: absolute; left: 12px; top: calc(50% - 1px); width: 24px; height: 2px; background: #4B3FB0"></span><span style="position: absolute; left: 4px; top: calc(50% - 8px); width: 16px; height: 16px; border-radius: 50%; background: #0B6E4F"></span></div>
+<div style="flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px 10px; border-bottom: 1px solid #ECEEE9">
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 500; color: #4B3FB0">e19f5a0</span>
+<span style="flex: 1 1 240px; min-width: 0; font-weight: 500">Merge alt-buffer: switch DSF buffer to HEPES</span>
+<span style="font-size: 12px; font-weight: 500; padding: 2px 8px; border-radius: 999px; background: #E6EAF0; color: #3D4A5C">Merge · reviewed by 2</span>
+<span style="font-size: 12px; color: #4C535C; width: 100%">Priya Raman · approved by Arjun Mehta, Lin Wei · 2 days ago · batch 205</span>
+</div>
+</li>
+
+<li style="display: flex; gap: 12px; align-items: stretch">
+<div aria-hidden="true" style="position: relative; width: 48px; flex: none"><span style="position: absolute; left: 11px; top: 0; bottom: 0; width: 2px; background: #0B6E4F"></span><span style="position: absolute; left: 35px; top: 0; bottom: 0; width: 2px; background: #4B3FB0"></span><span style="position: absolute; left: 30px; top: calc(50% - 6px); width: 12px; height: 12px; border-radius: 50%; background: #FFFFFF; border: 2px solid #4B3FB0; box-sizing: border-box"></span></div>
+<div style="flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px 10px; border-bottom: 1px solid #ECEEE9">
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 500; color: #4B3FB0">c55a2d8</span>
+<span style="flex: 1 1 240px; min-width: 0; font-weight: 500">Run 11b: compare HEPES and phosphate buffers</span>
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #ECEAFB; color: #4B3FB0">alt-buffer</span>
+<span style="font-size: 12px; color: #4C535C; width: 100%">Lin Wei · signed · 3 days ago · batch 203</span>
+</div>
+</li>
+
+<li style="display: flex; gap: 12px; align-items: stretch">
+<div aria-hidden="true" style="position: relative; width: 48px; flex: none"><span style="position: absolute; left: 11px; top: 0; bottom: 0; width: 2px; background: #0B6E4F"></span><span style="position: absolute; left: 35px; top: 0; bottom: 50%; width: 2px; background: #4B3FB0"></span><span style="position: absolute; left: 12px; top: calc(50% - 1px); width: 24px; height: 2px; background: #4B3FB0"></span><span style="position: absolute; left: 30px; top: calc(50% - 6px); width: 12px; height: 12px; border-radius: 50%; background: #FFFFFF; border: 2px solid #4B3FB0; box-sizing: border-box"></span></div>
+<div style="flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px 10px; border-bottom: 1px solid #ECEEE9">
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 500; color: #4B3FB0">0b7e6c3</span>
+<span style="flex: 1 1 240px; min-width: 0; font-weight: 500">Branch from Protocol v2: try HEPES buffer</span>
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #ECEAFB; color: #4B3FB0">alt-buffer</span>
+<span style="font-size: 12px; color: #4C535C; width: 100%">Lin Wei · signed · 4 days ago · batch 201</span>
+</div>
+</li>
+
+<li style="display: flex; gap: 12px; align-items: stretch">
+<div aria-hidden="true" style="position: relative; width: 48px; flex: none"><span style="position: absolute; left: 11px; top: 0; bottom: 0; width: 2px; background: #0B6E4F"></span><span style="position: absolute; left: 6px; top: calc(50% - 6px); width: 12px; height: 12px; border-radius: 50%; background: #FFFFFF; border: 2px solid #0B6E4F; box-sizing: border-box"></span></div>
+<div style="flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px 10px; border-bottom: 1px solid #ECEEE9">
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 500; color: #4B3FB0">92ad4f0</span>
+<span style="flex: 1 1 240px; min-width: 0; font-weight: 500">Run 13: expression at 37 °C failed</span>
+<span style="font-size: 12px; font-weight: 500; padding: 2px 8px; border-radius: 999px; background: #E6EAF0; color: #3D4A5C">Negative result</span>
+<span style="font-size: 12px; color: #4C535C; width: 100%">Lin Wei · signed · 5 days ago · batch 199</span>
+</div>
+</li>
+
+<li style="display: flex; gap: 12px; align-items: stretch">
+<div aria-hidden="true" style="position: relative; width: 48px; flex: none"><span style="position: absolute; left: 11px; top: 0; bottom: 0; width: 2px; background: #0B6E4F"></span><span style="position: absolute; left: 6px; top: calc(50% - 6px); width: 12px; height: 12px; border-radius: 50%; background: #FFFFFF; border: 2px solid #0B6E4F; box-sizing: border-box"></span></div>
+<div style="flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px 10px; border-bottom: 1px solid #ECEEE9">
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 500; color: #4B3FB0">6e2f0aa</span>
+<span style="flex: 1 1 240px; min-width: 0; font-weight: 500">Milestone M1 released: link Runs 9 and 12 as evidence</span>
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #E3F1EB; color: #0B6E4F">tag m1-released</span>
+<span style="font-size: 12px; color: #4C535C; width: 100%">Priya Raman · signed · 9 Oct · batch 176</span>
+</div>
+</li>
+
+<li style="display: flex; gap: 12px; align-items: stretch">
+<div aria-hidden="true" style="position: relative; width: 48px; flex: none"><span style="position: absolute; left: 11px; top: 0; bottom: 50%; width: 2px; background: #0B6E4F"></span><span style="position: absolute; left: 6px; top: calc(50% - 6px); width: 12px; height: 12px; border-radius: 50%; background: #FFFFFF; border: 2px solid #0B6E4F; box-sizing: border-box"></span></div>
+<div style="flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px 10px">
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 500; color: #4B3FB0">3f81c27</span>
+<span style="flex: 1 1 240px; min-width: 0; font-weight: 500">Commit H1 pre-registration</span>
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #E3F1EB; color: #0B6E4F">tag h1-preregistered</span>
+<span style="font-size: 12px; color: #4C535C; width: 100%">Priya Raman · signed · 14 Aug · batch 140</span>
+</div>
+</li>
+</ol>
+<a href="History.dc.html" style="align-self: center; margin-top: 8px; min-height: 44px; display: inline-flex; align-items: center; font-weight: 500">Show 40 older commits</a>
+</section>
+
+<section aria-labelledby="diff-h" style="background: #FFFFFF; border: 1px solid #DDE0DA; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px">
+<h2 id="diff-h" style="margin: 0; font-size: 16px; font-weight: 600">Changes in <span style="font-family: 'IBM Plex Mono', monospace; color: #4B3FB0">a41c9e2</span></h2>
+<span style="font-size: 12px; color: #646B73">Parent 7d03b1f · signed with key 0x3a9d…b71e</span>
+</div>
+<div style="border: 1px solid #DDE0DA; border-radius: 8px; overflow: hidden">
+<div style="padding: 8px 12px; background: #F5F6F3; font-size: 13px; font-weight: 500; border-bottom: 1px solid #DDE0DA">Run 14 · Observations</div>
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; line-height: 1.6">
+<div style="padding: 4px 12px; background: #FBEFD9; color: #8A4B00">− Wild type melted in the expected range.</div>
+<div style="padding: 4px 12px; background: #E3F1EB; color: #0B6E4F">+ Wild type melted in the expected range. Variants L2 and L5 show a second transition near 70 °C; repeat with fresh dye before drawing conclusions.</div>
+</div>
+</div>
+<div style="border: 1px solid #DDE0DA; border-radius: 8px; overflow: hidden">
+<div style="padding: 8px 12px; background: #F5F6F3; font-size: 13px; font-weight: 500; border-bottom: 1px solid #DDE0DA">Files</div>
+<ul style="list-style: none; margin: 0; padding: 0; font-family: 'IBM Plex Mono', monospace; font-size: 12px; line-height: 1.6">
+<li style="padding: 4px 12px; color: #0B6E4F">+ plate3_meltcurves.csv · 412 KB</li>
+<li style="padding: 4px 12px; color: #0B6E4F">+ plate3_layout.xlsx · 38 KB</li>
+<li style="padding: 4px 12px; color: #0B6E4F">+ instrument_export_run14.zip · 18.4 MB</li>
+</ul>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<a href="Entry.dc.html" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #C9CDC6; background: #FFFFFF; color: #15181C; font-weight: 500; text-decoration: none">Open Run 14</a>
+<button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #C9CDC6; background: #FFFFFF; color: #15181C; font: inherit; font-weight: 500; cursor: pointer">Restore this version</button>
+<button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #C9CDC6; background: #FFFFFF; color: #15181C; font: inherit; font-weight: 500; cursor: pointer">Branch from here</button>
+</div>
+<p style="margin: 0; font-size: 12px; color: #646B73">Restoring creates a new commit. Nothing in the history is ever rewritten.</p>
+</section>
+
+</div>
+
+<aside style="flex: 1 1 340px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+
+<section aria-labelledby="mr-h" style="background: #FFFFFF; border: 2px solid #4B3FB0; border-radius: 12px; padding: 19px; display: flex; flex-direction: column; gap: 12px">
+<span style="font-size: 12px; font-weight: 600; color: #4B3FB0">Open merge request</span>
+<h2 id="mr-h" style="margin: 0; font-size: 16px; font-weight: 600; line-height: 1.35">Add H2 draft and docking protocol</h2>
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #4C535C">h2-computational → main</span>
+<div style="display: flex; flex-wrap: wrap; gap: 6px"><span style="font-size: 12px; font-weight: 500; padding: 2px 8px; border-radius: 999px; background: #E3F1EB; color: #0B6E4F">+3 records</span><span style="font-size: 12px; font-weight: 500; padding: 2px 8px; border-radius: 999px; background: #FBEFD9; color: #8A4B00">1 record edited</span><span style="font-size: 12px; font-weight: 500; padding: 2px 8px; border-radius: 999px; background: #E6EAF0; color: #3D4A5C">No conflicts</span></div>
+<ul style="list-style: none; margin: 0; padding: 10px 0 0; border-top: 1px solid #ECEEE9; display: flex; flex-direction: column; gap: 6px">
+<li style="display: flex; justify-content: space-between; gap: 8px"><span>Priya Raman</span><span style="font-size: 12px; color: #646B73">Review requested</span></li>
+<li style="display: flex; justify-content: space-between; gap: 8px"><span>Lin Wei</span><span style="font-size: 12px; color: #646B73">Review requested</span></li>
+</ul>
+<span style="font-size: 12px; color: #4C535C">main needs 1 approval before a merge</span>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button type="button" style="flex: 1 1 auto; min-height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #4B3FB0; background: #4B3FB0; color: #FFFFFF; font: inherit; font-weight: 600; cursor: pointer">Review changes</button>
+<button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #C9CDC6; background: #FFFFFF; color: #15181C; font: inherit; font-weight: 500; cursor: pointer">Comment</button>
+</div>
+</section>
+
+<section aria-labelledby="br-h" style="background: #FFFFFF; border: 1px solid #DDE0DA; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 12px">
+<h2 id="br-h" style="margin: 0; font-size: 16px; font-weight: 600">Branches</h2>
+<ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px">
+<li style="display: flex; flex-direction: column; gap: 2px"><div style="display: flex; justify-content: space-between; gap: 8px"><span style="font-family: 'IBM Plex Mono', monospace; font-weight: 500">main</span><span style="font-size: 12px; font-weight: 500; padding: 1px 8px; border-radius: 999px; background: #E6EAF0; color: #3D4A5C">Protected</span></div><span style="font-size: 12px; color: #646B73">The shared record · merges need 1 approval</span></li>
+<li style="display: flex; flex-direction: column; gap: 2px"><div style="display: flex; justify-content: space-between; gap: 8px"><span style="font-family: 'IBM Plex Mono', monospace; font-weight: 500">h2-computational</span><span style="font-size: 12px; color: #646B73">4 ahead</span></div><span style="font-size: 12px; color: #646B73">Arjun Mehta · merge request open</span></li>
+<li style="display: flex; flex-direction: column; gap: 2px"><div style="display: flex; justify-content: space-between; gap: 8px"><span style="font-family: 'IBM Plex Mono', monospace; font-weight: 500; color: #4C535C">alt-buffer</span><span style="font-size: 12px; color: #0B6E4F">Merged</span></div><span style="font-size: 12px; color: #646B73">Lin Wei · merged 2 days ago</span></li>
+</ul>
+</section>
+
+<section aria-labelledby="tags-h" style="background: #FFFFFF; border: 1px solid #DDE0DA; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 12px">
+<h2 id="tags-h" style="margin: 0; font-size: 16px; font-weight: 600">Tags</h2>
+<p style="margin: 0; font-size: 12px; color: #646B73">Named points the group can cite and return to</p>
+<ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px">
+<li style="display: flex; justify-content: space-between; gap: 8px"><span style="font-family: 'IBM Plex Mono', monospace">m1-released</span><span style="font-size: 12px; color: #646B73">9 Oct</span></li>
+<li style="display: flex; justify-content: space-between; gap: 8px"><span style="font-family: 'IBM Plex Mono', monospace">h1-preregistered</span><span style="font-size: 12px; color: #646B73">14 Aug</span></li>
+<li style="display: flex; justify-content: space-between; gap: 8px"><span style="font-family: 'IBM Plex Mono', monospace">protocol-v3</span><span style="font-size: 12px; color: #646B73">2 Aug</span></li>
+</ul>
+<button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #C9CDC6; background: #FFFFFF; color: #15181C; font: inherit; font-weight: 500; cursor: pointer">Tag current version</button>
+</section>
+
+</aside>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1640}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pre-register a hypothesis</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F5F6F3}
+a{color:#0B6E4F}a:hover{color:#08523B}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-wrap: wrap; background: #F5F6F3; color: #15181C; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 14px; line-height: 1.45">
+
+<nav aria-label="Open Labbook" style="flex: 1 1 232px; box-sizing: border-box; padding: 20px 14px; background: #FFFFFF; border-right: 1px solid #DDE0DA; display: flex; flex-direction: column; gap: 24px">
+<div style="display: flex; align-items: center; gap: 10px; padding: 0 10px">
+<svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><rect x="0" y="0" width="28" height="28" rx="7" fill="#0B6E4F"></rect><rect x="8" y="8" width="12" height="2.5" rx="1.25" fill="#FFFFFF"></rect><rect x="8" y="13" width="12" height="2.5" rx="1.25" fill="#FFFFFF"></rect><rect x="8" y="18" width="7" height="2.5" rx="1.25" fill="#FFFFFF"></rect></svg>
+<div style="display: flex; flex-direction: column"><span style="font-weight: 600; font-size: 15px">Open Labbook</span><span style="font-size: 12px; color: #646B73">on Logos Basecamp</span></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span style="padding: 0 12px 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #646B73">This project</span>
+<a href="Main.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 8px; text-decoration: none; color: #15181C">Board</a>
+<a href="Entry.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 8px; text-decoration: none; color: #15181C">Notebook</a>
+<a href="Hypothesis.dc.html" aria-current="page" style="display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 8px; text-decoration: none; background: #E3F1EB; color: #0B6E4F; font-weight: 600">Hypotheses</a>
+<a href="Funding.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 8px; text-decoration: none; color: #15181C">Funding</a>
+<a href="Publish.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 8px; text-decoration: none; color: #15181C">Publish</a>
+<a href="History.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 8px; text-decoration: none; color: #15181C">History</a>
+<a href="Members.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 8px; text-decoration: none; color: #15181C">Members</a>
+</div>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span style="padding: 0 12px 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #646B73">Projects</span>
+<a href="Main.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 8px; text-decoration: none; color: #15181C; font-weight: 500">Thermostable lipase variants</a>
+<a href="Main.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 8px; text-decoration: none; color: #4C535C">Biofilm assay protocols</a>
+<a href="NewProject.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 8px; text-decoration: none; color: #0B6E4F; font-weight: 500">+ New project</a>
+</div>
+<div style="margin-top: auto; border: 1px solid #DDE0DA; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #4C535C">
+<div style="display: flex; align-items: center; gap: 8px"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: #0B6E4F"></span><span style="color: #15181C; font-weight: 500">Node online</span></div>
+<span>Logos testnet v0.3</span>
+<span>Synced with 3 of 4 members</span>
+</div>
+</nav>
+
+<main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 28px 32px 48px; display: flex; flex-direction: column; gap: 20px">
+
+<nav aria-label="Breadcrumb" style="font-size: 13px; color: #646B73; display: flex; gap: 6px; flex-wrap: wrap"><a href="Main.dc.html">Board</a><span aria-hidden="true">/</span><span>Hypotheses</span><span aria-hidden="true">/</span><span style="color: #15181C">H1</span></nav>
+
+<header style="display: flex; flex-direction: column; gap: 8px; max-width: 760px">
+<h1 style="margin: 0; font-size: 28px; line-height: 1.2; font-weight: 600; letter-spacing: -0.01em">Pre-register H1</h1>
+<p style="margin: 0; color: #4C535C; font-size: 15px">Lock the plan before the data arrives. Only a fingerprint goes on-chain; the text stays encrypted with the project key until you reveal it.</p>
+</header>
+
+<ol aria-label="Pre-registration steps" style="list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px">
+<li style="flex: 1 1 180px; display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: #FFFFFF; border: 1px solid #DDE0DA; border-radius: 10px"><span style="width: 24px; height: 24px; border-radius: 50%; background: #0B6E4F; color: #FFFFFF; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600">1</span><div style="display: flex; flex-direction: column"><span style="font-weight: 500">Write</span><span style="font-size: 12px; color: #0B6E4F">Done</span></div></li>
+<li style="flex: 1 1 180px; display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: #FFFFFF; border: 1px solid #DDE0DA; border-radius: 10px"><span style="width: 24px; height: 24px; border-radius: 50%; background: #0B6E4F; color: #FFFFFF; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600">2</span><div style="display: flex; flex-direction: column"><span style="font-weight: 500">Group review</span><span style="font-size: 12px; color: #0B6E4F">2 of 2 approved</span></div></li>
+<li aria-current="step" style="flex: 1 1 180px; display: flex; align-items: center; gap: 10px; padding: 11px 13px; background: #FFFFFF; border: 2px solid #4B3FB0; border-radius: 10px"><span style="width: 24px; height: 24px; border-radius: 50%; background: #4B3FB0; color: #FFFFFF; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600">3</span><div style="display: flex; flex-direction: column"><span style="font-weight: 600">Commit on LEZ</span><span style="font-size: 12px; color: #4B3FB0">Current step</span></div></li>
+<li style="flex: 1 1 180px; display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: #FFFFFF; border: 1px solid #DDE0DA; border-radius: 10px"><span style="width: 24px; height: 24px; border-radius: 50%; background: #ECEEE9; color: #4C535C; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600">4</span><div style="display: flex; flex-direction: column"><span style="font-weight: 500">Reveal at publication</span><span style="font-size: 12px; color: #646B73">Later</span></div></li>
+</ol>
+
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+
+<section aria-labelledby="plan-h" style="flex: 999 1 560px; min-width: 0; background: #FFFFFF; border: 1px solid #DDE0DA; border-radius: 12px; padding: 24px; display: flex; flex-direction: column; gap: 18px">
+<h2 id="plan-h" style="margin: 0; font-size: 16px; font-weight: 600">The plan</h2>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="hyp" style="font-size: 12px; font-weight: 500; color: #4C535C">Hypothesis</label>
+<textarea id="hyp" rows="3" style="font: inherit; font-size: 15px; padding: 10px 12px; border: 1px solid #C9CDC6; border-radius: 8px; resize: vertical; color: #15181C">Substitutions in the lid domain raise T50 by at least 5 °C relative to wild type without reducing specific activity below 80% of wild type.</textarea>
+</div>
+<fieldset style="border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px">
+<legend style="font-size: 12px; font-weight: 500; color: #4C535C; padding: 0; margin-bottom: 6px">Predictions</legend>
+<div style="display: flex; gap: 10px; align-items: center"><span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #4B3FB0; width: 24px">P1</span><input type="text" aria-label="Prediction 1" value="At least 2 of 7 variants show ΔT50 ≥ 5 °C in DSF." style="flex: 1; min-width: 0; font: inherit; min-height: 44px; box-sizing: border-box; padding: 0 12px; border: 1px solid #C9CDC6; border-radius: 8px; color: #15181C"></div>
+<div style="display: flex; gap: 10px; align-items: center"><span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #4B3FB0; width: 24px">P2</span><input type="text" aria-label="Prediction 2" value="Those variants keep ≥ 80% of wild-type activity at 37 °C." style="flex: 1; min-width: 0; font: inherit; min-height: 44px; box-sizing: border-box; padding: 0 12px; border: 1px solid #C9CDC6; border-radius: 8px; color: #15181C"></div>
+<a href="Hypothesis.dc.html" style="align-self: flex-start; font-weight: 500; margin-left: 34px">+ Add prediction</a>
+</fieldset>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="fals" style="font-size: 12px; font-weight: 500; color: #4C535C">What would prove it wrong</label>
+<textarea id="fals" rows="2" style="font: inherit; padding: 10px 12px; border: 1px solid #C9CDC6; border-radius: 8px; resize: vertical; color: #15181C">H1 is rejected if no variant reaches ΔT50 ≥ 5 °C across three replicates.</textarea>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="analysis" style="font-size: 12px; font-weight: 500; color: #4C535C">Analysis plan</label>
+<textarea id="analysis" rows="3" style="font: inherit; padding: 10px 12px; border: 1px solid #C9CDC6; border-radius: 8px; resize: vertical; color: #15181C">Melting temperature from the first derivative of fluorescence; mean of three replicates; each variant compared with wild type by Welch's t-test, α = 0.05, Holm correction.</textarea>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px">
+<span style="font-size: 12px; font-weight: 500; color: #4C535C">Grows from</span>
+<a href="Main.dc.html" style="display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border-radius: 999px; background: #F5F6F3; border: 1px solid #DDE0DA; text-decoration: none; color: #15181C">Idea · Deep mutational scan of the lid domain</a>
+</div>
+<div style="display: flex; flex-direction: column; gap: 4px; padding-top: 14px; border-top: 1px solid #ECEEE9">
+<span style="font-size: 12px; font-weight: 500; color: #4C535C">Group review</span>
+<span>Approved by Priya Raman and Ana Kovač · comments resolved</span>
+</div>
+</section>
+
+<aside aria-labelledby="commit-h" style="flex: 1 1 340px; min-width: 0; background: #FFFFFF; border: 2px solid #4B3FB0; border-radius: 12px; padding: 23px; display: flex; flex-direction: column; gap: 16px">
+<h2 id="commit-h" style="margin: 0; font-size: 16px; font-weight: 600">What gets committed</h2>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 12px; font-weight: 600; color: #4B3FB0">Public, on LEZ</span>
+<ul style="margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px">
+<li>A salted fingerprint of this plan</li>
+<li>The time of commitment</li>
+<li>The project it belongs to</li>
+</ul>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 12px; font-weight: 600; color: #3D4A5C">Private, stays with the group</span>
+<ul style="margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px">
+<li>The hypothesis, predictions and analysis plan</li>
+<li>Who wrote it</li>
+<li>The salt that unlocks the fingerprint</li>
+</ul>
+</div>
+<div style="background: #F5F6F3; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 12px; color: #646B73">Fingerprint preview</span>
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; word-break: break-all">sha256:9f2c41d8…07be41a</span>
+</div>
+<label style="display: flex; gap: 10px; align-items: flex-start; cursor: pointer"><input type="checkbox" checked style="width: 18px; height: 18px; margin: 2px 0 0; accent-color: #4B3FB0"><span>Share a sealed copy with the funding reviewers</span></label>
+<label style="display: flex; gap: 10px; align-items: flex-start; cursor: pointer"><input type="checkbox" style="width: 18px; height: 18px; margin: 2px 0 0; accent-color: #4B3FB0"><span>I understand that edits after this point create a new version, and this one stays on record</span></label>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button type="button" style="flex: 1 1 auto; min-height: 44px; padding: 0 18px; border-radius: 8px; border: 1px solid #4B3FB0; background: #4B3FB0; color: #FFFFFF; font: inherit; font-weight: 600; cursor: pointer">Commit to LEZ</button>
+<button type="button" style="min-height: 44px; padding: 0 18px; border-radius: 8px; border: 1px solid #C9CDC6; background: #FFFFFF; color: #15181C; font: inherit; font-weight: 500; cursor: pointer">Save draft</button>
+</div>
+<p style="margin: 0; font-size: 12px; color: #646B73">When you publish, the salt is released so anyone can recompute the fingerprint and confirm the plan predates the data.</p>
+</aside>
+
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1320}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

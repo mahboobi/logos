@@ -1,0 +1,165 @@
+{
+  "_note": "Demo data shown in every mockup. Fictional people and values. Used by olb_core fixtures mode (OLB_FIXTURES=1).",
+  "session": { "node": "online", "network": "Logos testnet v0.3", "peersOnline": 3, "peersTotal": 4 },
+  "me": { "name": "Priya Raman", "orcid": "0000-0000-0000-0000", "fingerprint": "71D4 08BE 3C2A · 9F10 66E2 A0C3", "role": "lead" },
+  "projects": [
+    { "id": "proj-lipase", "title": "Thermostable lipase variants for biodiesel", "privacy": "private", "ideaCount": 5 },
+    { "id": "proj-biofilm", "title": "Biofilm assay protocols", "privacy": "invite_only", "ideaCount": 2 }
+  ],
+  "board": {
+    "projectId": "proj-lipase",
+    "title": "Thermostable lipase variants for biodiesel",
+    "badges": [
+      { "kind": "neutral", "text": "Private to project group" },
+      { "kind": "neutral", "text": "5 ideas" },
+      { "kind": "done", "text": "1 published" }
+    ],
+    "status": {
+      "sync": { "label": "Live sync", "value": "3 of 4 members online", "sub": "Edits arrive over Logos Delivery, end-to-end encrypted" },
+      "copies": { "label": "Copies of project files", "value": "4 copies · 1 always-on replica", "warning": "1 file is only on this laptop", "warningAction": { "text": "Pin it to the replica", "recordId": "entry-run14" } },
+      "history": { "label": "Version history", "value": "134 signed commits · 3 branches", "sub": "Last anchored on LEZ 12 min ago" }
+    },
+    "stagesUsed": ["Idea", "Hypothesis", "Funding", "Experiments", "Data", "Publish"],
+    "ideas": [
+      { "id": "idea-lid", "stage": 4, "published": false, "title": "Deep mutational scan of the lid domain", "summary": "Find lid-domain substitutions that raise thermal stability without losing activity.", "privacy": "Private · project group",
+        "facts": [{ "k": "Hypothesis", "v": "H1 pre-registered" }, { "k": "Funding", "v": "2,000 of 6,000 released" }, { "k": "Notebook", "v": "6 entries · 1 negative result" }, { "k": "Data", "v": "1 dataset · 4 copies" }],
+        "branch": "main", "headCommit": "a41c9e2", "headMessage": "Run 14: add plate 3 melt curves", "commitSummary": "48 commits", "lead": "Priya R.", "people": "3 people", "updated": "6 min ago", "open": "entry-run14" },
+      { "id": "idea-comp", "stage": 2, "published": false, "title": "Computational redesign of the lid domain", "summary": "Use structure-based design to propose variants before the next wet-lab screen.", "privacy": "Private · project group",
+        "facts": [{ "k": "Hypothesis", "v": "H2 in group review" }, { "k": "Funding", "v": "Not started" }, { "k": "Notebook", "v": "2 entries" }, { "k": "Data", "v": "None yet" }],
+        "branch": "h2-computational", "headCommit": "5c2e8d1", "headMessage": "Add H2 draft and docking protocol", "commitSummary": "Merge request open", "lead": "Arjun M.", "people": "2 people", "updated": "1 h ago", "open": "hyp-h2" },
+      { "id": "idea-beads", "stage": 3, "published": false, "title": "Immobilise the enzyme on magnetic beads for reuse", "summary": "Test whether bead-bound lipase keeps its activity over repeated reaction cycles.", "privacy": "Private · project group",
+        "facts": [{ "k": "Hypothesis", "v": "H3 pre-registered" }, { "k": "Funding", "v": "Proposal open · 1,200 of 5,000" }, { "k": "Notebook", "v": "1 pilot entry" }, { "k": "Data", "v": "None yet" }],
+        "branch": "main", "headCommit": "e07a3b9", "headMessage": "Publish funding proposal and milestones", "commitSummary": "17 commits", "lead": "Lin W.", "people": "2 people", "updated": "yesterday", "open": "prop-beads" },
+      { "id": "idea-hot", "stage": 1, "published": false, "title": "Screen hot-spring metagenome libraries", "summary": "Look for naturally thermostable lipases instead of engineering one.", "privacy": "Draft · only Arjun",
+        "facts": [{ "k": "Hypothesis", "v": "Not yet" }, { "k": "Funding", "v": "Not started" }, { "k": "Notebook", "v": "No entries" }, { "k": "Data", "v": "None yet" }],
+        "branch": "main", "headCommit": "19b4f60", "headMessage": "Draft scope and sample sources", "commitSummary": "3 commits", "lead": "Arjun M.", "people": "1 person", "updated": "3 days ago", "open": "idea-hot" },
+      { "id": "idea-solvent", "stage": 6, "published": true, "title": "Solvent tolerance of wild-type lipase", "summary": "Baseline activity in methanol and ethanol, the reference for every later variant.", "privacy": "Public",
+        "facts": [{ "k": "Hypothesis", "v": "H0 revealed at publication" }, { "k": "Funding", "v": "Fully released" }, { "k": "Notebook", "v": "11 entries · 2 negative results" }, { "k": "Data", "v": "2 public datasets" }],
+        "branch": "main", "headCommit": "c9d1f77", "headMessage": "Publish preprint v2 (tag preprint-v2)", "commitSummary": "62 commits", "lead": "Priya R.", "people": "4 people", "updated": "2 Sep", "open": "pub-solvent" }
+    ],
+    "activity": [
+      { "text": "Labbook agent proposed 4 metadata edits to Run 14", "link": "entry-run14", "time": "6 min ago" },
+      { "text": "Batch 212 anchored on LEZ · 38 entries", "time": "12 min ago" },
+      { "text": "Arjun Mehta opened a merge request: h2-computational into main", "link": "mr-h2", "time": "1 h ago" },
+      { "text": "Ana Kovač approved evidence for milestone M2 of Lid-domain screen", "link": "prop-lid", "time": "1 h ago" },
+      { "text": "Lin Wei marked Run 13 as a negative result", "link": "entry-run13", "time": "3 h ago" },
+      { "text": "Replica node pinned 6 new files", "time": "4 h ago" }
+    ]
+  },
+  "records": {
+    "entry-run14": {
+      "type": "entry", "title": "Run 14 · Thermal shift assay, plate 3", "version": 3, "status": "draft", "tests": "H1",
+      "purpose": "Measure the melting temperature of the seven lid-domain variants and wild type, three replicates each.",
+      "follows": [{ "id": "protocol-v3-dsf", "label": "Protocol v3 · Differential scanning fluorimetry" }, { "id": "hyp-h1", "label": "H1 · lid-domain stability", "kind": "current" }],
+      "parameters": [
+        { "name": "Temperature range", "value": "25 → 95", "unit": "°C", "source": "Instrument file" },
+        { "name": "Ramp rate", "value": "1", "unit": "°C/min", "source": "Instrument file" },
+        { "name": "Dye", "value": "SYPRO Orange, 5×", "unit": "—", "source": "Typed by Arjun M." },
+        { "name": "Protein concentration", "value": "0.2", "unit": "mg/mL", "source": "From Protocol v3" },
+        { "name": "Replicates", "value": "3 per variant", "unit": "—", "source": "Typed by Arjun M." }
+      ],
+      "observations": "Wild type melted in the expected range. Variants L2 and L5 show a second transition near 70 °C; repeat with fresh dye before drawing conclusions.",
+      "deviations": "Plate sat at room temperature for 10 minutes before the run.",
+      "files": [
+        { "name": "plate3_meltcurves.csv", "size": "412 KB", "cid": "logos:zb2rh…7hQe", "copies": 4 },
+        { "name": "plate3_layout.xlsx", "size": "38 KB", "cid": "logos:zb2rh…A21c", "copies": 4 },
+        { "name": "instrument_export_run14.zip", "size": "18.4 MB", "cid": "logos:zb2rh…9kLm", "copies": 1, "onThisNodeOnly": true }
+      ],
+      "suggestions": [
+        { "id": "sg1", "label": "Dye · map to ChEBI term", "before": "sypro orange 5x", "after": "SYPRO Orange, 5×" },
+        { "id": "sg2", "label": "Ramp rate unit · Units Ontology", "before": "C/min", "after": "°C/min" },
+        { "id": "sg3", "label": "Expression host · NCBI Taxonomy", "before": null, "after": "Escherichia coli BL21(DE3)", "inferred": true, "source": "Taken from Protocol v3, not from this run." },
+        { "id": "sg4", "label": "Add parent link", "before": null, "after": "Run 13 (same variants, failed expression)" }
+      ],
+      "agent": { "name": "Labbook agent", "operator": "Arjun M." },
+      "provenance": { "builtOn": ["H1 · lid-domain stability", "Protocol v3 · DSF"], "usedBy": ["Dataset · DSF melt curves, runs 10–14"] },
+      "signatures": [{ "name": "Arjun Mehta", "role": "author", "state": "signed" }, { "name": "Priya Raman", "role": "approver", "state": "waiting" }],
+      "anchor": { "current": "v3 joins the next batch once shared", "previous": "v2 anchored in batch 209" },
+      "versions": [{ "v": 3, "by": "Arjun M.", "time": "today, 08:42" }, { "v": 2, "by": "Arjun M.", "time": "yesterday" }, { "v": 1, "by": "Lin W.", "time": "2 days ago" }]
+    },
+    "hyp-h1": {
+      "type": "hypothesis", "label": "H1",
+      "statement": "Substitutions in the lid domain raise T50 by at least 5 °C relative to wild type without reducing specific activity below 80% of wild type.",
+      "predictions": [{ "label": "P1", "text": "At least 2 of 7 variants show ΔT50 ≥ 5 °C in DSF." }, { "label": "P2", "text": "Those variants keep ≥ 80% of wild-type activity at 37 °C." }],
+      "falsification": "H1 is rejected if no variant reaches ΔT50 ≥ 5 °C across three replicates.",
+      "analysisPlan": "Melting temperature from the first derivative of fluorescence; mean of three replicates; each variant compared with wild type by Welch's t-test, α = 0.05, Holm correction.",
+      "growsFrom": "Idea · Deep mutational scan of the lid domain",
+      "review": "Approved by Priya Raman and Ana Kovač · comments resolved",
+      "step": 3, "fingerprintPreview": "sha256:9f2c41d8…07be41a"
+    }
+  },
+  "funding": {
+    "prop-lid": {
+      "title": "Lid-domain screen", "badges": ["Fully funded", "Tests H1", "Testnet tokens only"],
+      "raised": "6,000", "released": "2,000", "escrow": "4,000", "rule": "2 of 3 reviewers",
+      "milestones": [
+        { "id": "M1", "title": "Express and purify 7 variants and wild type", "amount": "2,000", "state": "released", "releasedOn": "9 Oct", "approvedBy": ["Ana Kovač", "Rui Santos"], "evidence": ["Protocol v3", "Run 9", "Run 12"] },
+        { "id": "M2", "title": "Thermal shift on all variants, three replicates", "amount": "2,000", "state": "awaiting", "needed": 2, "evidence": ["Run 14", "Dataset · DSF melt curves, runs 10–14"], "approvals": [{ "name": "Ana Kovač", "state": "approved", "time": "1 h ago" }, { "name": "Rui Santos", "state": "pending" }, { "name": "Mei Tanaka (you)", "state": "pending" }] },
+        { "id": "M3", "title": "Activity at 37 °C and preprint", "amount": "2,000", "state": "locked" }
+      ],
+      "contributors": [{ "name": "Open Science Collective", "kind": "public", "amount": "3,000" }, { "name": "Host institution seed fund", "kind": "public", "amount": "1,500" }, { "name": "Private contributor", "kind": "private", "amount": "1,500" }],
+      "reviewers": [{ "name": "Ana Kovač", "key": "0x8c1e…44f0" }, { "name": "Rui Santos", "key": "0x27ab…9d13" }, { "name": "Mei Tanaka", "key": "0x5f90…c2e7" }]
+    }
+  },
+  "history": {
+    "commits": [
+      { "id": "a41c9e2", "message": "Run 14: add plate 3 melt curves", "lane": 0, "badge": { "kind": "attention", "text": "Waiting for next anchor" }, "meta": "Arjun Mehta · signed · 6 min ago · 1 record edited, 3 files added", "selected": true },
+      { "id": "7d03b1f", "message": "Map dye and units to ontology terms (4 agent edits accepted)", "lane": 0, "badge": { "kind": "done", "text": "Batch 212" }, "meta": "Labbook agent, run by Arjun Mehta · signed by both · 20 min ago" },
+      { "id": "e19f5a0", "message": "Merge alt-buffer: switch DSF buffer to HEPES", "lane": 0, "merge": { "fromLane": 1 }, "badge": { "kind": "neutral", "text": "Merge · reviewed by 2" }, "meta": "Priya Raman · approved by Arjun Mehta, Lin Wei · 2 days ago · batch 205" },
+      { "id": "c55a2d8", "message": "Run 11b: compare HEPES and phosphate buffers", "lane": 1, "badge": { "kind": "branch", "text": "alt-buffer" }, "meta": "Lin Wei · signed · 3 days ago · batch 203" },
+      { "id": "0b7e6c3", "message": "Branch from Protocol v2: try HEPES buffer", "lane": 1, "fork": { "toLane": 0 }, "badge": { "kind": "branch", "text": "alt-buffer" }, "meta": "Lin Wei · signed · 4 days ago · batch 201" },
+      { "id": "92ad4f0", "message": "Run 13: expression at 37 °C failed", "lane": 0, "badge": { "kind": "neutral", "text": "Negative result" }, "meta": "Lin Wei · signed · 5 days ago · batch 199" },
+      { "id": "6e2f0aa", "message": "Milestone M1 released: link Runs 9 and 12 as evidence", "lane": 0, "badge": { "kind": "tag", "text": "tag m1-released" }, "meta": "Priya Raman · signed · 9 Oct · batch 176" },
+      { "id": "3f81c27", "message": "Commit H1 pre-registration", "lane": 0, "badge": { "kind": "tag", "text": "tag h1-preregistered" }, "meta": "Priya Raman · signed · 14 Aug · batch 140" }
+    ],
+    "diff": {
+      "commit": "a41c9e2", "parent": "7d03b1f", "signer": "0x3a9d…b71e",
+      "changes": [{ "record": "Run 14", "field": "Observations", "before": "Wild type melted in the expected range.", "after": "Wild type melted in the expected range. Variants L2 and L5 show a second transition near 70 °C; repeat with fresh dye before drawing conclusions." }],
+      "files": { "added": ["plate3_meltcurves.csv · 412 KB", "plate3_layout.xlsx · 38 KB", "instrument_export_run14.zip · 18.4 MB"], "removed": [], "changed": [] }
+    },
+    "mergeRequest": { "id": "mr-h2", "title": "Add H2 draft and docking protocol", "source": "h2-computational", "target": "main", "added": 3, "edited": 1, "conflicts": 0, "reviewers": [{ "name": "Priya Raman", "state": "requested" }, { "name": "Lin Wei", "state": "requested" }], "approvalsNeeded": 1 },
+    "branches": [
+      { "name": "main", "status": "Protected", "meta": "The shared record · merges need 1 approval" },
+      { "name": "h2-computational", "status": "4 ahead", "meta": "Arjun Mehta · merge request open" },
+      { "name": "alt-buffer", "status": "Merged", "meta": "Lin Wei · merged 2 days ago" }
+    ],
+    "tags": [{ "name": "m1-released", "date": "9 Oct" }, { "name": "h1-preregistered", "date": "14 Aug" }, { "name": "protocol-v3", "date": "2 Aug" }]
+  },
+  "members": {
+    "people": [
+      { "name": "Priya Raman", "note": "ORCID linked", "role": "Lead · owner", "ideas": "3 of 5", "key": "0x71d4…a0c3", "online": true },
+      { "name": "Arjun Mehta", "note": "ORCID linked · runs Labbook agent", "role": "Contributor", "ideas": "4 of 5", "key": "0x3a9d…b71e", "online": true },
+      { "name": "Lin Wei", "note": "ORCID not linked", "role": "Contributor", "ideas": "3 of 5", "key": "0xc08e…5d29", "online": false, "lastSeen": "3 h ago" },
+      { "name": "Ana Kovač", "note": "External · partner institute", "role": "Reviewer", "ideas": "1 of 5", "key": "0x8c1e…44f0", "online": true }
+    ],
+    "replicas": [{ "name": "Host lab replica", "meta": "Always on · keeps a copy of every file · cannot read or sign" }],
+    "pendingInvites": [
+      { "id": "inv-rui", "kind": "id", "name": "Rui Santos", "role": "Reviewer", "fingerprint": "9C4F 2B71 D0A8 · 5E3C 11F9 E21A", "state": "sent", "sent": "2 days ago" },
+      { "id": "inv-code-3hxp", "kind": "code", "code": "OLB-3HXP-…", "requester": "Mei Tanaka", "fingerprint": "5F90 … C2E7", "state": "awaiting_approval" }
+    ],
+    "projectKey": { "version": 3, "rotated": "2 Oct" }
+  },
+  "inviteDemo": {
+    "olbId": "olb1:9c4f2b71d0a85e3c11f9…e21a",
+    "parsed": { "name": "Rui Santos", "orcidClaimed": true, "fingerprint": "9C4F 2B71 D0A8 · 5E3C 11F9 E21A", "online": true },
+    "code": "OLB-7Q4M-K2XD-93RB"
+  },
+  "publish": {
+    "chain": [
+      { "stage": "Idea", "title": "Deep mutational scan of the lid domain", "status": "Committed 3 Jul", "kind": "current" },
+      { "stage": "Hypothesis", "title": "H1 · lid-domain stability", "status": "Committed 14 Aug", "kind": "current" },
+      { "stage": "Funding", "title": "Lid-domain screen", "status": "3 milestones", "kind": "done" },
+      { "stage": "Experiments", "title": "Runs 9–14", "status": "6 entries · 1 negative", "kind": "neutral" },
+      { "stage": "Data", "title": "DSF melt curves, runs 10–14", "status": "RO-Crate · 12 files", "kind": "done" },
+      { "stage": "Manuscript", "title": "Preprint v4", "status": "Ready to publish", "kind": "final" }
+    ],
+    "credits": [
+      { "name": "Priya Raman", "roles": "Conceptualization, Supervision", "work": "14 records", "status": "Accepted" },
+      { "name": "Arjun Mehta", "roles": "Investigation, Data curation", "work": "31 records", "status": "Accepted" },
+      { "name": "Lin Wei", "roles": "Investigation", "work": "9 records", "status": "Awaiting reply" },
+      { "name": "Ana Kovač", "roles": "Review of funding milestones", "work": "2 approvals", "status": "Accepted" },
+      { "name": "Labbook agent", "note": "AI · run by Arjun Mehta", "roles": "Data curation", "work": "22 accepted edits", "status": "Listed separately" }
+    ],
+    "manuscript": { "name": "lipase_lid_preprint_v4.pdf", "size": "2.1 MB" }
+  }
+}
