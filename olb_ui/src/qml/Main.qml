@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Dialogs
 
 // Phase 0 harness, now on design-system tokens (docs/02). This is still a
 // developer surface, not a product screen: S1-S8 and M1 from docs/03 are
@@ -28,6 +29,21 @@ Rectangle {
     readonly property var recordModel: parseJson(root.recordsJson, [])
     readonly property var cidModel: parseJson(root.cidsJson, [])
     readonly property var statusObj: parseJson(root.coreStatus, ({}))
+
+    FileDialog {
+        id: uploadPicker
+        title: "Choose a file to store"
+        onAccepted: {
+            uploadPath.text = selectedFile;
+            root.backend.uploadFile(selectedFile);
+        }
+    }
+
+    FolderDialog {
+        id: destPicker
+        title: "Choose where to save the fetched file"
+        onAccepted: fetchDest.text = selectedFolder
+    }
 
     Connections {
         target: logos
@@ -185,11 +201,17 @@ Rectangle {
                     spacing: Theme.s12
                     TextField {
                         id: uploadPath
-                        placeholderText: "/absolute/path/to/file"
+                        placeholderText: "Choose a file, or type an absolute path"
                         implicitHeight: Theme.touchTarget
                         Layout.fillWidth: true
                         font.family: Theme.mono
                         font.pixelSize: Theme.small
+                    }
+                    Button {
+                        text: "Choose file…"
+                        implicitHeight: Theme.touchTarget
+                        enabled: root.ready
+                        onClicked: uploadPicker.open()
                     }
                     Button {
                         text: "Upload"
@@ -219,6 +241,12 @@ Rectangle {
                         font.pixelSize: Theme.small
                     }
                     Button {
+                        text: "Choose folder…"
+                        implicitHeight: Theme.touchTarget
+                        enabled: root.ready
+                        onClicked: destPicker.open()
+                    }
+                    Button {
                         text: "Fetch"
                         implicitHeight: Theme.touchTarget
                         enabled: root.ready && fetchCid.text.length > 0 && fetchDest.text.length > 0
@@ -241,10 +269,13 @@ Rectangle {
 
                 Text {
                     visible: root.lastStorageResult !== ""
-                    text: root.lastStorageResult
+                    readonly property var parsed: root.parseJson(root.lastStorageResult, null)
+                    readonly property bool failed: parsed && parsed.ok === false
+                    color: failed ? Theme.amber : Theme.ink3
+                    text: failed && parsed.error ? parsed.error.message
+                                                 : root.lastStorageResult
                     font.family: Theme.mono
                     font.pixelSize: Theme.meta
-                    color: Theme.ink3
                     wrapMode: Text.Wrap
                     Layout.fillWidth: true
                 }

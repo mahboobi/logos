@@ -4,6 +4,17 @@
 // metadata.json#dependencies — typed wrappers + typed event accessors.
 #include "logos_sdk.h"
 
+#include <QUrl>
+
+// A native file dialog hands back a file:// URL; olb_core wants a plain
+// absolute path. Accept either so the view can pass what the picker gives it.
+static QString toLocalPath(const QString &pathOrUrl)
+{
+    if (pathOrUrl.startsWith(QStringLiteral("file:")))
+        return QUrl(pathOrUrl).toLocalFile();
+    return pathOrUrl;
+}
+
 void OlbUiBackend::syncFromCore()
 {
     // Typed, synchronous calls across the IPC seam. olb_core's LIDL methods
@@ -35,12 +46,12 @@ void OlbUiBackend::uploadFile(QString absPath)
     // Asynchronous: this returns a session envelope, and the CID arrives on
     // file_stored. Surface the immediate envelope so a rejected path (not
     // absolute, missing) is visible at once rather than silently doing nothing.
-    setLastStorageResult(modules().olb_core.upload_file(absPath));
+    setLastStorageResult(modules().olb_core.upload_file(toLocalPath(absPath)));
 }
 
 void OlbUiBackend::fetchFile(QString cid, QString absDest)
 {
-    setLastStorageResult(modules().olb_core.fetch_file(cid, absDest));
+    setLastStorageResult(modules().olb_core.fetch_file(cid, toLocalPath(absDest)));
 }
 
 void OlbUiBackend::onContextReady()
