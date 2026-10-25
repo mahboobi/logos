@@ -32,10 +32,12 @@ Item {
         anchors.margins: 24
         spacing: 16
 
+        // No explicit colour: the template's #ffffff was invisible on
+        // Basecamp's light background. Phase 1a replaces this with a
+        // design/Theme.qml token (docs/02).
         Text {
             text: "Open Labbook — Phase 0 skeleton"
             font.pixelSize: 20
-            color: "#ffffff"
             Layout.alignment: Qt.AlignHCenter
         }
 

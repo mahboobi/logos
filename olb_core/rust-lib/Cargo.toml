@@ -1,6 +1,6 @@
 [package]
 name = "olb_core"
-version = "1.0.0"
+version = "0.1.0"
 edition = "2021"
 
 # Standalone crate — the empty table keeps cargo from adopting any workspace it
