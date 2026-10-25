@@ -18,7 +18,7 @@ Phases are ordered so a real lab can use the notebook as early as possible. Each
 
 **Tasks**
 1. Install Nix (flakes), Rust ≥ 1.81, `lgs` at `d4b15ff`. Run `lgs basecamp setup`.
-2. Scaffold `olb_ui` from `logos-module-builder/0.3.0#ui-qml-backend` and `olb_core` from **`#rust-module`** (not `#rust` — that template does not exist). Both as **immediate children of the repo root**, not under `modules/`: scaffold discovers module flakes exactly one level down. Pin the builder in each `flake.nix`, and add `<dep>.inputs.logos-module-builder.follows = "logos-module-builder"` to every sub-flake.
+2. Scaffold `olb_ui` from `logos-module-builder/0.3.0#ui-qml-backend` and `olb_core` from `#rust` (verified against the flake's `templates` attribute 25 Oct 2026; the source directory is `templates/rust-module/`, but the attribute is `rust`). Both as **immediate children of the repo root**, not under `modules/`: scaffold discovers module flakes exactly one level down. Pin the builder in each `flake.nix`, and add `<dep>.inputs.logos-module-builder.follows = "logos-module-builder"` to every sub-flake.
 3. `olb_core.session.status` returns a JSON string; `olb_ui` shows it.
 4. `olb_core` publishes a signed test record on a Delivery topic; second profile receives and displays it.
 5. Upload a file through `storage_module`, fetch it on the other profile by CID.

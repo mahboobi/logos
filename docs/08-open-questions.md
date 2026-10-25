@@ -64,8 +64,12 @@ Answered on 25 October 2026 by reading the pinned source, not the published docs
 Clone paths are as cloned for that review; the repo and tag are what matter.
 
 ### R1 — Rust core module template (was Q1)
-`logos-module-builder/0.3.0` names the template **`rust-module`**, not `rust`
-(`flake.nix` line 254; `docs/07` task 2 is wrong). It is **Rust-first**: the trait
+`logos-module-builder/0.3.0` provides the template as **`#rust`** — the source
+directory is `templates/rust-module/`, but the flake attribute is `rust`
+(confirmed by evaluating `.#templates`; the full set is `default`, `rust`,
+`rust-with-external-lib`, `ui-qml`, `ui-qml-backend`, `with-external-lib`).
+`docs/07` was right about this and an earlier revision of this file was wrong.
+It is **Rust-first**: the trait
 in `rust-lib/src/lib.rs` *is* the contract and the builder derives the `.lidl` from
 it (`codegen.rust.trait`). No `build.rs`, no committed `.lidl`, no `Q_INVOKABLE`.
 A Rust module **can** call C++ modules and vice versa, through generated typed
@@ -174,6 +178,37 @@ previous session reads back with its messages and `history_only` set: it can be
 labelled and deleted, but it cannot be sent into or invited to." Messages persist
 as history; identity does not. `docs/04` §1 stands, and D2 (Delivery-only) is the
 right call.
+
+### R9 — Nix module builds fail on macOS 14.5 (open blocker, 25 Oct 2026)
+**No Logos module builds on this machine**, including a stock `#rust` template
+module. The failure is in nixpkgs' Qt wrapper hook, not in Logos code:
+`logos-view-generator-0.1.0` compiles, links and installs, then its `fixupPhase`
+segfaults (SIGSEGV, exit 139) inside
+`wrap-qt6-apps-no-gui-hook/nix-support/setup-hook` line 80 — the
+`find … -print0 | while read … isELF/isMachO …` loop. Everything downstream is
+cascade.
+
+Scope: `logos-view-generator` is a shared toolchain dependency, not UI-only, so
+this blocks `olb_core` as much as `olb_ui`, and `lgs basecamp setup` with them.
+Reproduced deterministically on a direct `nix-store --realise` of the single
+derivation and again on a clean probe module.
+
+Ruled out:
+- *bash 5.3 dynamic-fd bug* — the `exec {fd}< … ; exec {fd}<&-` pattern those
+  helpers use runs clean under the same `bash-5.3p3`.
+- *Binary-cache workaround* — the builder flake declares no `nixConfig` and
+  Logos publishes no substituter, so the derivation cannot be fetched prebuilt.
+
+Leading hypothesis, unconfirmed: macOS 14.5 (Darwin 23.5.0, build 23F79) is
+older than this nixpkgs/Qt combination is exercised against. The nixpkgs bash
+reports a `darwin24.6.0` build triple, though `MACOSX_DEPLOYMENT_TARGET=11.3`
+argues that alone should not matter. `wrapQtAppsHook` has a long history of
+Darwin breakage (nixpkgs#102044, #174828) but no report matches this segfault.
+
+Action: macOS update planned. Until then the Nix path is closed and work
+proceeds in the pure-Rust `olb-records` crate (plain cargo, no Logos deps).
+Re-test with a stock `#rust` template module after the update before assuming
+it is fixed.
 
 ### R8 — Toolchain and packaging facts worth recording
 - **Do not bump the `logos-module-builder` 0.3.0 pin.** It locks exactly the
