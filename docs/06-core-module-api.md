@@ -22,10 +22,14 @@
 
 ## Conventions
 
-- `olb_core` declares its contract in a **committed `olb_core.lidl`** with record
-  types, arrays and optional fields (as `chat_module` does), not as JSON strings.
-  The JSON-envelope convention below survives only where a payload is genuinely
-  open-ended; prefer a typed record wherever the shape is known.
+- `olb_core`'s contract is the **Rust trait** `OlbCoreModule`; the builder
+  derives `olb_core.lidl` from it and installs it as a sidecar. There is no
+  committed `.lidl` on the `#rust` path at the 0.3.0 pin, and the trait can only
+  express `String`, `i64`, `u64`, `f64`, `bool`, `Vec<u8>`, `Option<T>` — there
+  is no record spelling. **Record payloads therefore cross as JSON strings**, so
+  the JSON envelope below is the norm, not a fallback. LIDL itself does support
+  records, arrays, maps and optionals; only the Rust authoring path cannot
+  declare them. See `docs/08` R10 — this is an open decision, not a settled one.
 - The legacy envelope, where still used: `{"ok": true, "data": …}` or
   `{"ok": false, "error": {"code": "…", "message": "…"}}`.
 - Long operations (uploads, anchoring, sending) return immediately with `{"ok": true, "data": {"job": "<id>"}}` and report progress through events.

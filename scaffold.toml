@@ -21,6 +21,14 @@ pin = "d3af2972f51d9c542537d80d60ad8d20282ddcd1"
 build = "nix-flake"
 attr = "cli"
 
+[modules.olb_core]
+flake = "path:./olb_core#lgx"
+role = "project"
+
+[modules.olb_ui]
+flake = "path:./olb_ui#lgx"
+role = "project"
+
 [wallet]
 home_dir = ".scaffold/wallet"
 
@@ -38,10 +46,3 @@ risc0_dev_mode = true
 
 [circuits]
 version = "0.4.1"
-
-[modules]
-olb_core = { path = "olb_core" }
-olb_ui   = { path = "olb_ui" }
-
-[basecamp.profiles.alice]
-[basecamp.profiles.bob]

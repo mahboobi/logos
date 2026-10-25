@@ -179,7 +179,49 @@ labelled and deleted, but it cannot be sent into or invited to." Messages persis
 as history; identity does not. `docs/04` §1 stands, and D2 (Delivery-only) is the
 right call.
 
-### R9 — Nix module builds fail on macOS 14.5 (open blocker, 25 Oct 2026)
+### R10 — The Rust path cannot carry a committed `.lidl` with record types (25 Oct 2026)
+`docs/06` Conventions and `CLAUDE.md`'s decided-architecture table both say
+`olb_core` "declares its contract in a **committed `olb_core.lidl`** with record
+types ... not as JSON strings". Against module-builder 0.3.0 that is not
+achievable on the Rust path, and the two decided items conflict with each other.
+
+Evidence, from the pinned source:
+- The `#rust` template is **Rust-first**: "the trait below IS the contract. The
+  builder derives the `.lidl` from it (`codegen.rust.trait` in metadata.json) —
+  no `build.rs`, no committed `.lidl`." Confirmed by building `olb_core`: the
+  builder *emitted* `share/logos/olb_core.lidl` as an install sidecar, derived
+  from `trait OlbCoreModule`. Nothing in the repo declares it.
+- The trait can only express the scalar subset the template documents:
+  `String`, `i64`, `u64`, `f64`, `bool`, `Vec<u8>`, `Option<T>`. There is no
+  struct/record spelling, so an OLB record crosses the seam as a JSON string —
+  exactly what `docs/06` wanted to avoid.
+- **LIDL itself is not the limitation.** `lidl/ast.hpp` has `TypeDecl`,
+  `FieldDecl` and `TypeExpr::{Primitive, Array, Map, Optional, Named}`, so
+  records, arrays, maps and optionals are all in the language. A hand-written
+  `.lidl` (the C++ path, as `chat_module` does) can use them.
+
+So the choice is between two decided items, not between a doc and the source:
+1. Keep `olb_core` in Rust (CLAUDE.md engineering rules) and accept JSON strings
+   for record payloads — `docs/06`'s legacy envelope becomes the norm, not the
+   exception.
+2. Author `olb_core` in C++ with a committed `.lidl` to get typed records, and
+   give up "Rust for `olb_core`".
+3. Keep Rust, and revisit once a later module-builder lets a Rust module consume
+   a hand-written `.lidl`. Not available at the 0.3.0 pin.
+
+Phase 0 task 3 shipped under option 1 (`session_status() -> tstr`). **Unresolved
+— needs a decision before Phase 1b defines the record format.**
+
+What is confirmed working on the Rust path (read off the builder's doc-tests,
+not guessed):
+- dep wrappers in a `ui_qml` universal backend are Qt-typed, so `tstr` arrives
+  as `QString`
+- typed calls are synchronous and preserve snake_case
+  (`modules().rust_ledger_module.add_entry`)
+- a Rust events-trait `fn tally_changed` surfaces to subscribers as
+  `onTally_changed`, hence our `session_changed` -> `onSession_changed`
+
+### R9 — Nix module builds failed on macOS 14.5 (RESOLVED by OS update, 25 Oct 2026)
 **No Logos module builds on this machine**, including a stock `#rust` template
 module. The failure is in nixpkgs' Qt wrapper hook, not in Logos code:
 `logos-view-generator-0.1.0` compiles, links and installs, then its `fixupPhase`
@@ -205,10 +247,28 @@ reports a `darwin24.6.0` build triple, though `MACOSX_DEPLOYMENT_TARGET=11.3`
 argues that alone should not matter. `wrapQtAppsHook` has a long history of
 Darwin breakage (nixpkgs#102044, #174828) but no report matches this segfault.
 
-Action: macOS update planned. Until then the Nix path is closed and work
-proceeds in the pure-Rust `olb-records` crate (plain cargo, no Logos deps).
-Re-test with a stock `#rust` template module after the update before assuming
-it is fixed.
+**Resolved.** The hypothesis was correct. On macOS 27.0.1 (build 26A434,
+Darwin 27.0.0) a clean stock `#rust` probe walked straight through the failing
+hook — `wrapping Qt applications ... wrapping .../logos-view-generator`, then
+`postPatchMkspecs` — and `nix build .#lgx` exited 0 with a real `.lgx`. Zero
+occurrences of SIGSEGV/exit 139 in the log. `olb_core` and `olb_ui` then both
+built to `.lgx` on the same toolchain. No code change was needed; do not carry
+a workaround for this.
+
+Still true and unrelated: the linker warns `dylib (... qtbase-6.9.2 ... QtCore)
+was built for newer macOS version (12.0) than being linked (11.3)` on every Qt
+link. Cosmetic at this pin.
+
+Separate issue found while re-testing, not a Logos problem: `cache.nixos.org`
+resolves to four Fastly POPs and two of them crawl from this ISP (~150 KB/s,
+stalling to <1 byte/sec and exhausting nix's 5 download attempts at 300 s each,
+which fails the whole build at `rustc-1.89.0`). Measured: 151.101.129.91 and
+151.101.1.91 slow; 151.101.65.91 and 151.101.193.91 fast — against ~1.6 MB/s to
+Cloudflare, so it is peering, not bandwidth. Pinning the fast POP in
+`/etc/hosts` fixed it. Note that `stalled-download-timeout` /
+`download-attempts` in `~/.config/nix/nix.conf` are **ignored** — substitution
+runs in the daemon and `trusted-users = root`, so those belong in
+`/etc/nix/nix.conf`.
 
 ### R8 — Toolchain and packaging facts worth recording
 - **Do not bump the `logos-module-builder` 0.3.0 pin.** It locks exactly the
