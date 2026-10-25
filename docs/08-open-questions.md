@@ -179,6 +179,57 @@ labelled and deleted, but it cannot be sent into or invited to." Messages persis
 as history; identity does not. `docs/04` §1 stands, and D2 (Delivery-only) is the
 right call.
 
+### R12 — The LEZ host runner does not submit transactions (open, 25 Oct 2026)
+`lgs create --template lez-framework` ships `src/bin/run_lez_counter.rs` with
+`// TODO: submit transaction via wallet` in every subcommand: it parses
+arguments, loads the program ELF, prints a line and returns. Nothing reaches
+the sequencer. `olb_registry`'s runner inherits that gap and says so on stderr
+rather than printing a success line it has not earned.
+
+**Consequence for Phase 0:** the phase acceptance test asks for "an anchor
+transaction for its hash visible on the local sequencer". That cannot pass
+until submission is written against the `nssa` / `wallet` API. The program
+itself is done and its IDL is correct — only the host-side submission path is
+missing.
+
+Also blocking a full task 6 run on this machine, both environmental:
+- **No risc0 guest builder.** Guest programs build in the pinned
+  `risczero/risc0-guest-builder` container by default; Docker is installed but
+  not running. The `[build].guest = "local"` alternative needs `cargo-risczero`,
+  which is not installed — though rustup does carry a `risc0` toolchain, so
+  local may be the shorter path.
+- Rust 1.92.0 is required by `rust-toolchain.toml` (edition 2024) and is
+  installed under rustup; the nix store toolchain is 1.89.0 and cannot build
+  this workspace.
+
+### R11 — The published Storage API reference does not match the shipped module (25 Oct 2026)
+`logos-storage-module/latest/api_reference.html` documents **3.0.2**. The
+version basecamp 0.3.0 ships — and that a running 0.3.0 instance on this
+machine has installed — is **2.1.3**, and their APIs differ:
+
+| | 3.0.2 (docs) | 2.1.3 (shipped) |
+| --- | --- | --- |
+| `uploadUrl` | `(filePath, chunkSize, advertise)` | `(filePath, chunkSize)` |
+| `downloadToUrl` | `(cid, filePath, local, chunkSize, isPrivate, advertise)` | `(cid, filePath, local, chunkSize)` |
+| `fetch` | `(cid, isPrivate, advertise)` | `(cid)` |
+| completion events | typed fields | one `payload: tstr` holding JSON |
+| also in 3.0.2 only | `getAdvertise`/`setAdvertise`, `collectMetrics`, `network()`, `loadConfigOrDefault` | — |
+
+Coding against the website would have failed to compile or, worse, compiled
+against the wrong arity. **Read the module's own `.lidl` instead** — every
+module built by a current module-builder publishes `packages.<system>.lidl`,
+and `nix build <flake>#lidl` gives the authoritative contract with full
+parameter docs. The same applies to Delivery.
+
+A related trap: scaffold's default `delivery_module` pin
+(`BASECAMP_DEPENDENCIES`, rev `1fde1566`) publishes **no** `lidl` output at
+all, so module-builder 0.3.0 refuses it — "lists dependencies that publish no
+LIDL". Delivery v0.3.3 (`1d995bda`) does. Pin that.
+
+Storage `init` also defaults `data-dir` to a **relative** `.cache/storage`,
+which collides between the alice and bob profiles; set it absolute under
+`instance_persistence_path`.
+
 ### R10 — The Rust path cannot carry a committed `.lidl` with record types (25 Oct 2026)
 `docs/06` Conventions and `CLAUDE.md`'s decided-architecture table both say
 `olb_core` "declares its contract in a **committed `olb_core.lidl`** with record

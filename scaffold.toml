@@ -33,6 +33,10 @@ role = "project"
 flake = "path:./olb_ui#lgx"
 role = "project"
 
+[modules.storage_module]
+flake = "github:logos-co/logos-storage-module/59b494e411b31797d029c0edb7e243198e13e771#lgx"
+role = "dependency"
+
 [wallet]
 home_dir = ".scaffold/wallet"
 
