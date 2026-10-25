@@ -257,20 +257,56 @@ impl OlbCoreModule for OlbCore {
         serde_json::Value::Array(cids.iter().rev().cloned().collect()).to_string()
     }
 
-    fn on_context_ready(&mut self, _ctx: &RustModuleContext) {
-        // Bring the Delivery node up, then subscribe. start() only dispatches;
-        // nodeStarted reports completion, so the listener watches for it.
-        if let Err(e) = modules().delivery_module.create_node(DELIVERY_CFG) {
-            eprintln!("[olb_core] delivery create_node failed: {e:?}");
-            return;
-        }
-        if let Err(e) = modules().delivery_module.start() {
-            eprintln!("[olb_core] delivery start failed: {e:?}");
-            return;
-        }
+    fn on_context_ready(&mut self, ctx: &RustModuleContext) {
+        // Do NOT call dependencies synchronously here. onContextReady fires a
+        // few hundred milliseconds BEFORE the per-caller token handshake
+        // completes (logos-module-builder docs/configuration.md), so an
+        // immediate call presents a token the provider has not registered yet
+        // and comes back {"code":"unauthorized","message":"token not
+        // recognized (re-exchange failed)"}. The SDK's own single re-exchange
+        // retry also fires too early to help. Bring-up runs off-thread with
+        // backoff instead.
+        let persistence = ctx.instance_persistence_path.clone();
+        std::thread::spawn(move || bring_up(&persistence));
+    }
+}
 
-        // EventSubscription is Send, implements Iterator, and unsubscribes on
-        // drop — so each listener owns its subscription for the module's life.
+/// Retry a dependency call until the per-caller token handshake has settled.
+fn retry_call<T>(
+    label: &str,
+    mut f: impl FnMut() -> Result<T, logos_rust_sdk::LogosError>,
+) -> Option<T> {
+    let mut delay = std::time::Duration::from_millis(250);
+    for attempt in 1..=8 {
+        match f() {
+            Ok(v) => {
+                if attempt > 1 {
+                    eprintln!("[olb_core] {label} succeeded on attempt {attempt}");
+                }
+                return Some(v);
+            }
+            Err(e) => {
+                eprintln!("[olb_core] {label} attempt {attempt} failed: {e:?}");
+                std::thread::sleep(delay);
+                delay = (delay * 2).min(std::time::Duration::from_secs(4));
+            }
+        }
+    }
+    eprintln!("[olb_core] {label} gave up after 8 attempts");
+    None
+}
+
+/// Bring up delivery and storage. Independent: a failure in one must not take
+/// the other down with it.
+fn bring_up(persistence_path: &str) {
+    // ---- Delivery (task 4) ----
+    let delivery_up = retry_call("delivery create_node", || {
+        modules().delivery_module.create_node(DELIVERY_CFG)
+    })
+    .is_some()
+        && retry_call("delivery start", || modules().delivery_module.start()).is_some();
+
+    if delivery_up {
         let mut m = modules();
         if let Ok(started) = m.delivery_module.on_node_started() {
             std::thread::spawn(move || {
@@ -279,70 +315,13 @@ impl OlbCoreModule for OlbCore {
                     {
                         *NODE_READY.lock().unwrap() = e.success;
                         if e.success {
-                            if let Err(err) = modules().delivery_module.subscribe(RECORD_TOPIC) {
-                                eprintln!("[olb_core] subscribe failed: {err:?}");
-                            }
+                            retry_call("delivery subscribe", || {
+                                modules().delivery_module.subscribe(RECORD_TOPIC)
+                            });
                         } else {
                             eprintln!("[olb_core] delivery node failed to start: {}", e.message);
                         }
                     }
-                }
-            });
-        }
-
-        // ---- Storage (task 5) ----
-        // data-dir must be absolute and per-instance: the contract's default
-        // is a RELATIVE ".cache/storage", which would collide between the
-        // alice and bob profiles sharing a working directory.
-        let data_dir = format!("{}/storage", _ctx.instance_persistence_path);
-        let storage_cfg = serde_json::json!({
-            "data-dir": data_dir,
-            "network": "logos.test",
-            "listen-port": 0,
-        })
-        .to_string();
-
-        match modules().storage_module.init(&storage_cfg) {
-            Ok(_) => match modules().storage_module.start() {
-                Ok(_) => *STORAGE_READY.lock().unwrap() = true,
-                Err(e) => eprintln!("[olb_core] storage start failed: {e:?}"),
-            },
-            Err(e) => eprintln!("[olb_core] storage init failed: {e:?}"),
-        }
-
-        let mut ms = modules();
-        if let Ok(uploads) = ms.storage_module.on_storage_upload_done() {
-            std::thread::spawn(move || {
-                for ev in uploads {
-                    // The contract delivers one JSON string:
-                    // {success, sessionId, cid?, error?}
-                    let Some(p) = storage_payload(&ev) else { continue };
-                    if p.get("success").and_then(|v| v.as_bool()) == Some(true) {
-                        if let Some(cid) = p.get("cid").and_then(|v| v.as_str()) {
-                            CIDS.lock().unwrap().push(serde_json::json!({
-                                "cid": cid, "direction": "upload",
-                            }));
-                        }
-                    }
-                    emit_file_stored(&p.to_string());
-                }
-            });
-        }
-
-        let mut md = modules();
-        if let Ok(downloads) = md.storage_module.on_storage_download_done() {
-            std::thread::spawn(move || {
-                for ev in downloads {
-                    let Some(p) = storage_payload(&ev) else { continue };
-                    if p.get("success").and_then(|v| v.as_bool()) == Some(true) {
-                        if let Some(sid) = p.get("sessionId").and_then(|v| v.as_str()) {
-                            // sessionId == CID for downloadToUrl.
-                            CIDS.lock().unwrap().push(serde_json::json!({
-                                "cid": sid, "direction": "download",
-                            }));
-                        }
-                    }
-                    emit_file_fetched(&p.to_string());
                 }
             });
         }
@@ -359,9 +338,9 @@ impl OlbCoreModule for OlbCore {
                     if msg.content_topic != RECORD_TOPIC {
                         continue;
                     }
-                    // Store catch-up replays history and upstream only
-                    // suppresses duplicates briefly and in memory, so the
-                    // contract requires dedup by messageHash.
+                    // Store catch-up replays history and upstream suppresses
+                    // duplicates only briefly and in memory, so the contract
+                    // requires dedup by messageHash.
                     {
                         let mut seen = SEEN_HASHES.lock().unwrap();
                         if seen.contains(&msg.message_hash) {
@@ -376,6 +355,61 @@ impl OlbCoreModule for OlbCore {
                     };
                     RECEIVED.lock().unwrap().push(rec.clone());
                     emit_record_received(&rec.to_string());
+                }
+            });
+        }
+    } else {
+        eprintln!("[olb_core] continuing without delivery; storage still attempted");
+    }
+
+    // ---- Storage (task 5) ----
+    // data-dir must be absolute and per-instance: the contract's default is a
+    // RELATIVE ".cache/storage", which would collide between alice and bob.
+    let storage_cfg = serde_json::json!({
+        "data-dir": format!("{persistence_path}/storage"),
+        "network": "logos.test",
+        "listen-port": 0,
+    })
+    .to_string();
+
+    let storage_up =
+        retry_call("storage init", || modules().storage_module.init(&storage_cfg)).is_some()
+            && retry_call("storage start", || modules().storage_module.start()).is_some();
+    *STORAGE_READY.lock().unwrap() = storage_up;
+
+    if storage_up {
+        let mut ms = modules();
+        if let Ok(uploads) = ms.storage_module.on_storage_upload_done() {
+            std::thread::spawn(move || {
+                for ev in uploads {
+                    // One JSON string: {success, sessionId, cid?, error?}
+                    let Some(p) = storage_payload(&ev) else { continue };
+                    if p.get("success").and_then(|v| v.as_bool()) == Some(true) {
+                        if let Some(cid) = p.get("cid").and_then(|v| v.as_str()) {
+                            CIDS.lock()
+                                .unwrap()
+                                .push(serde_json::json!({"cid": cid, "direction": "upload"}));
+                        }
+                    }
+                    emit_file_stored(&p.to_string());
+                }
+            });
+        }
+
+        let mut md = modules();
+        if let Ok(downloads) = md.storage_module.on_storage_download_done() {
+            std::thread::spawn(move || {
+                for ev in downloads {
+                    let Some(p) = storage_payload(&ev) else { continue };
+                    if p.get("success").and_then(|v| v.as_bool()) == Some(true) {
+                        if let Some(sid) = p.get("sessionId").and_then(|v| v.as_str()) {
+                            // sessionId == CID for downloadToUrl.
+                            CIDS.lock()
+                                .unwrap()
+                                .push(serde_json::json!({"cid": sid, "direction": "download"}));
+                        }
+                    }
+                    emit_file_fetched(&p.to_string());
                 }
             });
         }
