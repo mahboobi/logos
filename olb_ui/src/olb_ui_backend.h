@@ -12,7 +12,7 @@
  *   QML --QtRO--> OlbUiBackend --LogosAPI--> olb_core
  *
  * QML calls a .rep SLOT on logos.module("olb_ui") and reads replies through
- * the auto-synced PROPs; this backend calls olb_core via modules().
+ * the auto-synced PROPs; this backend calls olb_core through modules().
  * See CLAUDE.md "Hard constraints" R2 and docs/08 R2.
  */
 class OlbUiBackend : public OlbUiSimpleSource,
@@ -20,4 +20,8 @@ class OlbUiBackend : public OlbUiSimpleSource,
 {
 public:
     void refreshSessionStatus() override;
+
+    /// Fires when ui-host hands the plugin its LogosAPI, so subscriptions are
+    /// live before the view makes its first call.
+    void onContextReady() override;
 };
