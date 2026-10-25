@@ -365,10 +365,19 @@ fn bring_up(persistence_path: &str) {
     // ---- Storage (task 5) ----
     // data-dir must be absolute and per-instance: the contract's default is a
     // RELATIVE ".cache/storage", which would collide between alice and bob.
+    // Every port must be ephemeral, not just listen-port. The contract's
+    // defaults are fixed (disc-port 8090, metrics-port 8008), so a second
+    // profile binds the same discovery port as the first and storage_module
+    // dies with SIGSEGV — seen exactly once alice held 8090 and bob started.
+    // Two profiles on one machine is the normal dogfooding setup, so all of
+    // these have to be 0.
     let storage_cfg = serde_json::json!({
         "data-dir": format!("{persistence_path}/storage"),
         "network": "logos.test",
         "listen-port": 0,
+        "disc-port": 0,
+        "metrics": false,
+        "metrics-port": 0,
     })
     .to_string();
 

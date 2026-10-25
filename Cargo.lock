@@ -3881,12 +3881,15 @@ dependencies = [
 name = "olb-basecamp"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "borsh",
  "clap",
  "common",
  "hex",
  "nssa",
  "nssa_core",
  "olb_methods",
+ "sequencer_service_rpc",
  "serde",
  "spel-framework",
  "spel-framework-core",

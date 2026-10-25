@@ -1,3 +1,5 @@
+pub mod generated;
+
 #[allow(dead_code)]
 pub mod runner_support {
     use nssa::{AccountId, program::Program};

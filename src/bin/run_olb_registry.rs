@@ -1,14 +1,22 @@
 //! Host runner for the olb_registry LEZ program (Phase 0 task 6).
 //!
-//! `anchor` takes the Merkle root over an OLB record stream and the leaf count
-//! and writes them to the registry PDA.
+//! `anchor` submits a Merkle root over an OLB record stream, plus the leaf
+//! count, to the registry PDA. `show` reads the anchored state back.
+//!
+//! Submission goes through the generated client (`lgs build client`), which
+//! owns nonce lookup, signing-key retrieval, witness-set construction and the
+//! sequencer call.
 
+use anyhow::{Context, anyhow};
 use clap::{Parser, Subcommand};
 use olb_methods::OLB_REGISTRY_ELF;
 use wallet::WalletCore;
 
 #[path = "../lib.rs"]
 mod scaffold_lib;
+use scaffold_lib::generated::olb_registry_client::{
+    AnchorAccounts, OlbRegistryClient, compute_registry_pda,
+};
 use scaffold_lib::runner_support::{load_program, parse_account_id};
 
 #[derive(Parser, Debug)]
@@ -22,12 +30,9 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    /// Anchor a 32-byte Merkle root and its leaf count.
+    /// Anchor a 32-byte Merkle root and its leaf count on the sequencer.
     Anchor {
-        /// Registry PDA account id.
-        #[arg(long)]
-        registry: String,
-        /// Signing authority account id.
+        /// Signing authority account id (a self-owned public account).
         #[arg(long)]
         authority: String,
         /// Merkle root as 64 hex characters.
@@ -37,46 +42,62 @@ enum Command {
         #[arg(long)]
         count: u64,
     },
+    /// Print the registry PDA for this program.
+    Pda,
 }
 
-fn parse_root(raw: &str) -> [u8; 32] {
-    let bytes = hex::decode(raw.trim_start_matches("0x"))
-        .unwrap_or_else(|e| panic!("root must be hex: {e}"));
+fn parse_root(raw: &str) -> anyhow::Result<[u8; 32]> {
+    let bytes = hex::decode(raw.trim_start_matches("0x")).context("root must be hex")?;
     <[u8; 32]>::try_from(bytes.as_slice())
-        .unwrap_or_else(|_| panic!("root must be exactly 32 bytes (64 hex chars)"))
+        .map_err(|_| anyhow!("root must be exactly 32 bytes (64 hex chars), got {}", bytes.len()))
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    let _wallet_core = WalletCore::from_env().expect("wallet should initialize from environment");
-    let _program = load_program(cli.program_path.as_deref(), OLB_REGISTRY_ELF, "olb_registry");
+    let wallet_core =
+        WalletCore::from_env().context("failed to initialize wallet from environment")?;
+    let program = load_program(cli.program_path.as_deref(), OLB_REGISTRY_ELF, "olb_registry");
+    let program_id = program.id();
 
     match cli.command {
+        Command::Pda => {
+            println!("{}", compute_registry_pda(&program_id));
+        }
+
         Command::Anchor {
-            registry,
             authority,
             root,
             count,
         } => {
-            let _registry_id = parse_account_id(&registry);
-            let _authority_id = parse_account_id(&authority);
-            let root_bytes = parse_root(&root);
+            let authority_id = parse_account_id(&authority);
+            let root_bytes = parse_root(&root)?;
+            // The registry account is derived, not supplied: its seed is fixed
+            // in the program (`pda = literal("olb_registry")`), so accepting
+            // one from the caller would only let them pass the wrong account.
+            let registry = compute_registry_pda(&program_id);
 
+            let client = OlbRegistryClient::new(&wallet_core, program_id);
+            let tx_hash = client
+                .anchor(
+                    AnchorAccounts {
+                        registry,
+                        authority: authority_id,
+                    },
+                    root_bytes,
+                    count,
+                )
+                .await
+                .map_err(|e| anyhow!("anchor submission failed: {e}"))?;
+
+            println!("submitted transaction: tx_hash={tx_hash}");
+            println!("registry account: {registry}");
+            println!("anchored count={count} root={}", hex::encode(root_bytes));
             println!(
-                "anchor registry={registry} authority={authority} count={count} root={}",
-                hex::encode(root_bytes)
-            );
-            // NOT YET SUBMITTED. The lez-framework template ships its runner
-            // with this same gap (`// TODO: submit transaction via wallet` in
-            // run_lez_counter.rs), so nothing reaches the sequencer yet and
-            // docs/07 Phase 0's "anchor transaction visible on the local
-            // sequencer" is not met by this binary alone. Tracked as docs/08
-            // R12 rather than papered over with a fake success line.
-            eprintln!(
-                "warning: transaction submission is not implemented — \
-                 nothing was sent to the sequencer (docs/08 R12)"
+                "verification hint: lgs wallet -- account get --account-id Public/{registry}"
             );
         }
     }
+
+    Ok(())
 }
