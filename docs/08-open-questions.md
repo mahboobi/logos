@@ -179,28 +179,62 @@ labelled and deleted, but it cannot be sent into or invited to." Messages persis
 as history; identity does not. `docs/04` §1 stands, and D2 (Delivery-only) is the
 right call.
 
-### R12 — The LEZ host runner does not submit transactions (open, 25 Oct 2026)
+### R12 — LEZ anchoring end to end (RESOLVED 25 Oct 2026)
 `lgs create --template lez-framework` ships `src/bin/run_lez_counter.rs` with
 `// TODO: submit transaction via wallet` in every subcommand: it parses
 arguments, loads the program ELF, prints a line and returns. Nothing reaches
 the sequencer. `olb_registry`'s runner inherits that gap and says so on stderr
 rather than printing a success line it has not earned.
 
-**Consequence for Phase 0:** the phase acceptance test asks for "an anchor
-transaction for its hash visible on the local sequencer". That cannot pass
-until submission is written against the `nssa` / `wallet` API. The program
-itself is done and its IDL is correct — only the host-side submission path is
-missing.
+**Resolved.** An anchor is on the local sequencer:
 
-Also blocking a full task 6 run on this machine, both environmental:
-- **No risc0 guest builder.** Guest programs build in the pinned
-  `risczero/risc0-guest-builder` container by default; Docker is installed but
-  not running. The `[build].guest = "local"` alternative needs `cargo-risczero`,
-  which is not installed — though rustup does carry a `risc0` toolchain, so
-  local may be the shorter path.
-- Rust 1.92.0 is required by `rust-toolchain.toml` (edition 2024) and is
-  installed under rustup; the nix store toolchain is 1.89.0 and cannot build
-  this workspace.
+```
+tx_hash  3b1f92568204cd550823341365772faa7b99e4fd2aed7a881bb1711e3369608b
+account  Public/GU8Kt6X1rVhArDEksz4smhwTPVgrNcBSroguc2GRNszG
+data     0300000000000000 c3e9f97c...e9c3   (count=3 LE u64 ++ 32-byte root)
+balance  0
+```
+
+Sequencer: "Validated transaction ..., including it in block". `balance: 0`
+confirms writing state to `data` rather than `balance` avoids the
+conservation check that rejects minting.
+
+Writing the submission was small: `lgs build client` generates
+`OlbRegistryClient::anchor()`, which already does nonces, signing keys,
+`Message`/`WitnessSet` and `send_transaction`. The runner only had to call it.
+
+**The environment, not the code, was the work.** In order:
+1. `logos-blockchain-pol` needs the circuits release — `lgs setup` fetches it
+   to `.scaffold/circuits`; export `LOGOS_BLOCKCHAIN_CIRCUITS` at it.
+2. `rzup install cpp` — the risc0 C++ guest toolchain was missing, so `ring`'s
+   build script had no compiler.
+3. `rzup install cargo-risczero` — needed for the container builder. It hits
+   the GitHub API anonymously and gets rate-limited; `GITHUB_TOKEN=$(gh auth
+   token) rzup install ...` works.
+4. `DOCKER_DEFAULT_PLATFORM=linux/amd64` — the pinned
+   `risc0-guest-builder:r0.1.97.0` image has **no arm64 variant**, so on Apple
+   Silicon the build fails with "no match for platform in manifest". Emulated
+   it takes ~17 min.
+5. **`RISC0_SERVER_PATH` must point at `r0vm`.** Scaffold looks for it in the
+   rzup extensions dir for the LEZ-pinned risc0 version, does not find the
+   installed `~/.cargo/bin/r0vm`, and only warns. The sequencer then starts,
+   serves RPC, and **dies on its first block** — "Collecting transactions from
+   mempool, block creation" then "Main loop exited unexpectedly". Set it
+   explicitly or localnet silently lasts about 15 seconds.
+
+**Trap worth remembering: the embedded ELF is not the deployed ELF.**
+`risc0_build::embed_methods()` embeds the *local* guest build
+(`target/riscv-guest/...`) while `lgs deploy` deploys the *docker* build
+(`target/riscv-guest-docker/...`). Their image ids differ, so a runner using
+the embedded constant addresses a program the sequencer has never seen and the
+transaction fails the execution check with `InvalidInput("Unknown program")` —
+after being accepted and returning a tx_hash, so it looks like success. Pass
+`--program-path <docker elf>` to the runner, or deploy the local build.
+
+Still open: `lgs localnet start` returns once the sequencer is up, and the
+sequencer dies with the shell that spawned it; run it detached. There is no
+deploy inclusion receipt — scaffold notes the program id is computed locally
+from the submitted ELF, so deploy success is only "the wallet exited 0".
 
 ### R11 — The published Storage API reference does not match the shipped module (25 Oct 2026)
 `logos-storage-module/latest/api_reference.html` documents **3.0.2**. The
