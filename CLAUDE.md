@@ -20,33 +20,51 @@ Open Labbook (OLB) is a desktop app that runs inside **Logos Basecamp**. Researc
 
 Development runs on Linux (x86_64/aarch64) or macOS only. Basecamp setup needs ~5 GB free memory on first run.
 
+## Decided architecture (25 Oct 2026)
+
+| Decision | Choice | Why |
+| --- | --- | --- |
+| UI path | `ui-qml-backend` — `.rep` contract + C++ backend, process-isolated | The only path with end-to-end tests, and the one `logos-chat-ui` uses. Gives typed event push into QML PROPs and `QAbstractItemModel` lists via `logos.model()`, which OLB's tables and card grids need. |
+| `olb_core` contract | Committed `olb_core.lidl` with record types | Typed wire shapes across the IPC seam, as `chat_module` does, instead of JSON strings everywhere. `docs/06` becomes a real contract. |
+| Persistence | Solved in Phase 0, not deferred | Identity, keys and the commit DAG all assume durable local state (`docs/08` R6). |
+
+Do not revisit these without asking.
+
 ## Repository layout (target)
 
 ```
 olb-basecamp/
   CLAUDE.md
   scaffold.toml                 # lgs project file (committed)
-  modules/
-    olb_ui/                     # UI module, ui-qml-backend template, QML
-    olb_core/                   # core module, rust template
-    olb_replica/                # headless core module for always-on replica nodes (Phase 1b)
-  programs/                     # LEZ guest programs (logos-scaffold LEZ project)
-    olb_registry/  olb_funding/  olb_credit/
+  Cargo.toml  rust-toolchain.toml   # LEZ host-runner workspace (lez-framework template)
+  src/bin/run_olb_registry.rs   # LEZ host runners
+  methods/guest/src/bin/        # LEZ guest programs: olb_registry.rs, olb_funding.rs, olb_credit.rs
+  idl/
+  olb_core/                     # core module, rust-module template
+  olb_ui/                       # UI module, ui-qml-backend template (.rep + C++ backend + QML)
+  olb_replica/                  # headless core module for always-on replica nodes (Phase 1b)
   design/  docs/  fixtures/     # from this handoff package
 ```
+
+**Module flakes must be immediate children of the repo root.** Scaffold's
+auto-discovery reads the root flake, else exactly one directory level down; a
+`modules/olb_ui` would never be found. Sibling inputs use the single-line
+`olb_core.url = "path:../olb_core"` form, and every sub-flake needs
+`<dep>.inputs.logos-module-builder.follows = "logos-module-builder"` or builds
+fail opaquely under scaffold. See `docs/08` R8.
 
 Confirm the layout with the user before scaffolding (kickoff step 3).
 
 ## Hard constraints from the platform
 
-1. **QML UI modules are sandboxed.** No network, no file access outside the module directory. Every network, storage, crypto or chain operation goes through a core module: `logos.callModule("olb_core", "<method>", [args])`. Never try to work around the sandbox.
+1. **QML UI modules are sandboxed.** No network, no file access outside the module directory. Every network, storage, crypto or chain operation goes through a core module. **QML cannot call `olb_core` directly** — `logos.callModule` does not exist on the `ui-qml-backend` path. The chain is `QML --QtRO--> olb_ui C++ backend --LogosAPI--> olb_core`: QML calls a `.rep` SLOT on `logos.module("olb_ui")` and reads the reply through `logos.watch(...)`; the backend calls `modules().olb_core.<method>(...)`. See `docs/08` R2. Never try to work around the sandbox.
 2. **Each module runs in its own process.** Calls between modules are IPC. Keep payloads as JSON strings; keep them small; never pass file contents through the UI — pass CIDs and paths.
 3. **Logos Storage has no paid persistence.** A file lives only while some node holds it. OLB must pin every project file on every member node plus at least one replica node, and show copy counts in the UI.
 4. **Delivery Store is temporary.** Sync must survive by snapshotting project state to Storage, not by relying on message history.
 5. **Logos Chat addresses change every time Basecamp starts** (testnet). Never treat a Chat address as an identity. Identity = OLB signing key + ML-KEM-768 sealing key (`docs/04-invite-flow.md`).
 6. **Chat groups cannot remove members.** Do not use Chat groups for project membership.
 7. **LEZ shared private accounts are 1-of-n at the key layer.** Any spending threshold (for example "2 of 3 reviewers") must be enforced inside the LEZ program.
-8. **`lgs basecamp launch <profile>` wipes the profile.** Use it for clean tests. For state that must survive restarts, run Basecamp with `--user-dir`.
+8. **`lgs basecamp launch <profile>` wipes the profile — every time, including `module_data/`.** Clean-slate on every launch is the command's whole point, so `instancePersistencePath()` does **not** survive a relaunch. `--user-dir` is not an escape hatch: it and `LOGOS_USER_DIR` are the same knob `launch` itself sets per profile. Anything OLB must keep across launches (identity, keys, the SQLite store) lives outside the scrubbed tree. Being settled in Phase 0 — see `docs/08` R6.
 9. **Nix package builds only see git-tracked files.** `git add` every new file before `nix build .#lgx` or `lgs basecamp build`.
 
 ## UI rules

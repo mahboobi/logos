@@ -1,10 +1,33 @@
 # 06 — `olb_core` API (proposed)
 
-The QML UI calls `olb_core` through `logos.callModule("olb_core", "<method>", [args])`. This is a **proposal**: confirm in Phase 0 how the `rust` and `ui-qml-backend` templates expose methods, whether calls return synchronously or via callback/promise, and how core modules push events to QML. Adapt names to the template's conventions, then update this file.
+> **Corrected 25 Oct 2026 against the pinned source.** The call model below was
+> written against `logos.callModule("olb_core", "<method>", [args])`, **which does
+> not exist** on the `ui-qml-backend` path. The real chain has three layers:
+>
+> ```
+> QML  --QtRO-->  olb_ui C++ backend  --LogosAPI-->  olb_core (Rust)
+> ```
+>
+> - QML calls a `.rep` SLOT on `logos.module("olb_ui")`; the reply is asynchronous
+>   and arrives through `logos.watch(pending, onValue, onError)`.
+> - `.rep` PROPs auto-sync to QML over QtRO — that is how events reach the view,
+>   with no polling. Lists cross as `QAbstractItemModel`, read as
+>   `logos.model("olb_ui", "<prop>")`.
+> - The `olb_ui` backend calls `modules().olb_core.<method>(...)` (synchronous,
+>   returns `Result`) and arms event subscriptions in `onContextReady()`.
+>
+> So every method in this file needs **two** declarations: the `olb_core` contract
+> entry, and an `olb_ui` `.rep` SLOT or PROP that relays it. Full evidence in
+> `docs/08` R2 and R3; the reference implementation is `logos-chat-ui`.
 
 ## Conventions
 
-- Every method takes **one JSON string** argument and returns **one JSON string**: `{"ok": true, "data": …}` or `{"ok": false, "error": {"code": "…", "message": "…"}}`.
+- `olb_core` declares its contract in a **committed `olb_core.lidl`** with record
+  types, arrays and optional fields (as `chat_module` does), not as JSON strings.
+  The JSON-envelope convention below survives only where a payload is genuinely
+  open-ended; prefer a typed record wherever the shape is known.
+- The legacy envelope, where still used: `{"ok": true, "data": …}` or
+  `{"ok": false, "error": {"code": "…", "message": "…"}}`.
 - Long operations (uploads, anchoring, sending) return immediately with `{"ok": true, "data": {"job": "<id>"}}` and report progress through events.
 - Ids are strings. Times are RFC 3339. Amounts are strings of integer base units.
 - Error codes: `not_found`, `forbidden`, `invalid`, `conflict`, `offline`, `chain_error`, `storage_error`, `internal`.
@@ -55,8 +78,8 @@ NewProject payload:
 | Method | Input | Output |
 | --- | --- | --- |
 | `files.add` | `{recordId, path}` (path chosen by a native file dialog in core, not QML) | `{job}` → `fileAdded {cid, name, size}` |
-| `files.status` | `{cids[]}` | `[{cid, copies, onThisNodeOnly}]` |
-| `files.pin` | `{cid, target: "replica"}` | `{job}` |
+| `files.status` | `{cids[]}` | `[{cid, copies, onThisNodeOnly}]` — no network replica count exists; `copies` is counted from member/replica acknowledgements over Delivery. `exists(cid)` is local-only. |
+| `files.pin` | `{cid, target: "replica"}` | `{job}` — **Storage has no pin primitive.** Implement as `fetch(cid, …)` + `setAdvertise(cid, true)` plus a re-fetch schedule, because cached blocks expire at `block-ttl` (default 30d). See `docs/08` R4. |
 
 ### Hypotheses
 | Method | Input | Output |

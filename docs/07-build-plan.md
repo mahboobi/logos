@@ -18,12 +18,15 @@ Phases are ordered so a real lab can use the notebook as early as possible. Each
 
 **Tasks**
 1. Install Nix (flakes), Rust ≥ 1.81, `lgs` at `d4b15ff`. Run `lgs basecamp setup`.
-2. Scaffold `modules/olb_ui` from `logos-module-builder/0.3.0#ui-qml-backend` and `modules/olb_core` from `#rust`. Pin the builder in each `flake.nix`.
+2. Scaffold `olb_ui` from `logos-module-builder/0.3.0#ui-qml-backend` and `olb_core` from **`#rust-module`** (not `#rust` — that template does not exist). Both as **immediate children of the repo root**, not under `modules/`: scaffold discovers module flakes exactly one level down. Pin the builder in each `flake.nix`, and add `<dep>.inputs.logos-module-builder.follows = "logos-module-builder"` to every sub-flake.
 3. `olb_core.session.status` returns a JSON string; `olb_ui` shows it.
 4. `olb_core` publishes a signed test record on a Delivery topic; second profile receives and displays it.
 5. Upload a file through `storage_module`, fetch it on the other profile by CID.
-6. `lgs new programs` (LEZ), write `olb_registry.anchor(tag, root, count)`, deploy to localnet (`RISC0_DEV_MODE=1`), call it from `olb_core` (or from a runner if core → LEZ wallet integration is not yet clear; record the gap).
-7. Write findings into `docs/08-open-questions.md` (answer each question you can).
+6. LEZ programs: there is no `lgs new programs` command — use `lgs create --template lez-framework` (or lift its layout into this repo). Write `olb_registry.anchor(tag, root, count)` as a guest in `methods/guest/src/bin/olb_registry.rs`, deploy to localnet with `lgs deploy` (`RISC0_DEV_MODE=1`), and call it from a host runner in `src/bin/`. **Calling it from `olb_core` is an open risk**: Basecamp 0.3.0 ships no wallet module, so there is no module-level route to the LEZ wallet. Record which route works (`docs/08` item 3).
+7. **Persistence.** `lgs basecamp launch` scrubs `module_data/` on every launch, so `instancePersistencePath()` does not survive a relaunch and `--user-dir` is the same knob, not a workaround (`docs/08` R6). Find and prove a store location for identity, keys and SQLite that survives a relaunch, before Phase 1b builds on it.
+8. Measure the Delivery `send` payload ceiling; it bounds commit and snapshot size.
+9. Evaluate Delivery's reliable SDS channels (`channelCreate`/`channelSend`) against the bucket-topic design in `docs/01` §5 before committing to either.
+10. Write findings into `docs/08-open-questions.md` (answer each question you can).
 
 **Acceptance:** with `lgs basecamp launch alice` and `lgs basecamp launch bob`, a record typed on alice appears on bob within 10 s; a 5 MB file uploaded on alice downloads on bob with a matching SHA-256; an anchor transaction for its hash is visible on the local sequencer.
 
@@ -68,7 +71,7 @@ Then build screens in this order: S1 Board, S2 Entry, S8 New project, S7 Members
 8. Anchoring queue + Merkle proofs + `olb_registry` on localnet, then testnet.
 9. Wire S1, S2, S6, S8 to live data; keep fixtures mode working.
 
-**Acceptance:** alice creates a Private project (S8), adds an idea and Run entry with a file; bob (pre-provisioned member for this phase) sees it live; replica shows the file pinned (copies ≥ 3); history shows commits with "Batch n" after anchoring; "Verify proof" succeeds; killing alice and restarting with `--user-dir` keeps everything.
+**Acceptance:** alice creates a Private project (S8), adds an idea and Run entry with a file; bob (pre-provisioned member for this phase) sees it live; replica shows the file pinned (copies ≥ 3); history shows commits with "Batch n" after anchoring; "Verify proof" succeeds; killing alice and relaunching keeps everything — **via whatever persistence route Phase 0 established, not `--user-dir`**, which is the same knob `lgs basecamp launch` already sets and scrubs (`docs/08` R6).
 
 ## Phase 1c — Members and invites
 
