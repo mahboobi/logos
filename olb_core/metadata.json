@@ -8,7 +8,8 @@
   "description": "Open Labbook core: identity, records, version control, sync, storage and anchoring",
   "main": "olb_core_plugin",
   "dependencies": [
-    "delivery_module"
+    "delivery_module",
+    "storage_module"
   ],
   "codegen": {
     "rust": {

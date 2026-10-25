@@ -23,6 +23,9 @@ const RECORD_TOPIC: &str = "/open-labbook/1/records/json";
 /// reliable channels). Verbatim from the delivery_module.lidl createNode docs.
 const DELIVERY_CFG: &str = r#"{"mode":"Core","preset":"logos.test"}"#;
 
+/// Storage upload/download chunk size in bytes (the contract's default).
+const STORAGE_CHUNK: i64 = 65536;
+
 /// Trait name is not free: it is the metadata.json module name in PascalCase
 /// with `Module` appended — `olb_core` -> `OlbCoreModule`. `Send + 'static` is
 /// required because the generated dispatch stores the impl as
@@ -41,6 +44,17 @@ pub trait OlbCoreModule: Send + 'static {
     /// This node's signing-key fingerprint — the Phase 0 stand-in for identity.
     fn identity_fingerprint(&mut self) -> String;
 
+    /// Phase 0 task 5: upload a local file to Logos Storage by absolute path.
+    /// Asynchronous — returns the session id; the CID arrives on `file_stored`.
+    fn upload_file(&mut self, abs_path: String) -> String;
+
+    /// Fetch a stored file by CID and write it to `abs_dest`. Asynchronous —
+    /// completion arrives on `file_fetched`.
+    fn fetch_file(&mut self, cid: String, abs_dest: String) -> String;
+
+    /// CIDs this node has uploaded or fetched, as a JSON array.
+    fn stored_cids(&mut self) -> String;
+
     /// Called once the module is wired to the host. `ctx` carries the
     /// host-stamped instance id and persistence path.
     fn on_context_ready(&mut self, _ctx: &RustModuleContext) {}
@@ -52,6 +66,10 @@ pub trait OlbCoreModuleEvents {
     fn session_changed(&self, status: String);
     /// Fires on every verified record that arrives from a peer.
     fn record_received(&self, record_json: String);
+    /// Fires when an upload completes; payload carries `cid` and `sessionId`.
+    fn file_stored(&self, result_json: String);
+    /// Fires when a download completes; payload carries `sessionId`.
+    fn file_fetched(&self, result_json: String);
 }
 
 // The builder injects the generated scaffold here — the `install` entry point,
@@ -96,6 +114,8 @@ mod record {
 static RECEIVED: Mutex<Vec<serde_json::Value>> = Mutex::new(Vec::new());
 static SEEN_HASHES: Mutex<Vec<String>> = Mutex::new(Vec::new());
 static NODE_READY: Mutex<bool> = Mutex::new(false);
+static STORAGE_READY: Mutex<bool> = Mutex::new(false);
+static CIDS: Mutex<Vec<serde_json::Value>> = Mutex::new(Vec::new());
 
 struct OlbCore {
     signing: ed25519_dalek::SigningKey,
@@ -117,6 +137,14 @@ impl OlbCore {
     fn author_hex(&self) -> String {
         hex::encode(self.signing.verifying_key().to_bytes())
     }
+}
+
+/// Storage events carry a single `payload: tstr` holding JSON — unwrap the
+/// event array's first element, then parse it.
+fn storage_payload(ev: &logos_rust_sdk::EventData) -> Option<serde_json::Value> {
+    let arr = ev.data.as_array()?;
+    let raw = arr.first()?.as_str()?;
+    serde_json::from_str(raw).ok()
 }
 
 fn now_ms() -> i64 {
@@ -160,6 +188,8 @@ impl OlbCoreModule for OlbCore {
             "topic":     RECORD_TOPIC,
             "projects":  0,
             "records":   received,
+            "storage":   if *STORAGE_READY.lock().unwrap() { "online" } else { "offline" },
+            "cids":      CIDS.lock().unwrap().len(),
         })
         .to_string()
     }
@@ -193,6 +223,40 @@ impl OlbCoreModule for OlbCore {
         serde_json::Value::Array(recs.iter().rev().cloned().collect()).to_string()
     }
 
+    fn upload_file(&mut self, abs_path: String) -> String {
+        if !std::path::Path::new(&abs_path).is_absolute() {
+            return record::err("invalid", "upload_file needs an absolute path");
+        }
+        if !std::path::Path::new(&abs_path).exists() {
+            return record::err("not_found", &format!("no such file: {abs_path}"));
+        }
+        // uploadUrl is async: this returns a session id, and the CID arrives
+        // on storageUploadDone.
+        match modules().storage_module.upload_url(&abs_path, STORAGE_CHUNK) {
+            Ok(v) => serde_json::json!({"ok": true, "data": {"session": v}}).to_string(),
+            Err(e) => record::err("storage_error", &format!("{e:?}")),
+        }
+    }
+
+    fn fetch_file(&mut self, cid: String, abs_dest: String) -> String {
+        if !std::path::Path::new(&abs_dest).is_absolute() {
+            return record::err("invalid", "fetch_file needs an absolute destination");
+        }
+        // local=false so it will go to the network when the block is not cached.
+        match modules()
+            .storage_module
+            .download_to_url(&cid, &abs_dest, false, STORAGE_CHUNK)
+        {
+            Ok(v) => serde_json::json!({"ok": true, "data": {"session": v}}).to_string(),
+            Err(e) => record::err("storage_error", &format!("{e:?}")),
+        }
+    }
+
+    fn stored_cids(&mut self) -> String {
+        let cids = CIDS.lock().unwrap();
+        serde_json::Value::Array(cids.iter().rev().cloned().collect()).to_string()
+    }
+
     fn on_context_ready(&mut self, _ctx: &RustModuleContext) {
         // Bring the Delivery node up, then subscribe. start() only dispatches;
         // nodeStarted reports completion, so the listener watches for it.
@@ -222,6 +286,63 @@ impl OlbCoreModule for OlbCore {
                             eprintln!("[olb_core] delivery node failed to start: {}", e.message);
                         }
                     }
+                }
+            });
+        }
+
+        // ---- Storage (task 5) ----
+        // data-dir must be absolute and per-instance: the contract's default
+        // is a RELATIVE ".cache/storage", which would collide between the
+        // alice and bob profiles sharing a working directory.
+        let data_dir = format!("{}/storage", _ctx.instance_persistence_path);
+        let storage_cfg = serde_json::json!({
+            "data-dir": data_dir,
+            "network": "logos.test",
+            "listen-port": 0,
+        })
+        .to_string();
+
+        match modules().storage_module.init(&storage_cfg) {
+            Ok(_) => match modules().storage_module.start() {
+                Ok(_) => *STORAGE_READY.lock().unwrap() = true,
+                Err(e) => eprintln!("[olb_core] storage start failed: {e:?}"),
+            },
+            Err(e) => eprintln!("[olb_core] storage init failed: {e:?}"),
+        }
+
+        let mut ms = modules();
+        if let Ok(uploads) = ms.storage_module.on_storage_upload_done() {
+            std::thread::spawn(move || {
+                for ev in uploads {
+                    // The contract delivers one JSON string:
+                    // {success, sessionId, cid?, error?}
+                    let Some(p) = storage_payload(&ev) else { continue };
+                    if p.get("success").and_then(|v| v.as_bool()) == Some(true) {
+                        if let Some(cid) = p.get("cid").and_then(|v| v.as_str()) {
+                            CIDS.lock().unwrap().push(serde_json::json!({
+                                "cid": cid, "direction": "upload",
+                            }));
+                        }
+                    }
+                    emit_file_stored(&p.to_string());
+                }
+            });
+        }
+
+        let mut md = modules();
+        if let Ok(downloads) = md.storage_module.on_storage_download_done() {
+            std::thread::spawn(move || {
+                for ev in downloads {
+                    let Some(p) = storage_payload(&ev) else { continue };
+                    if p.get("success").and_then(|v| v.as_bool()) == Some(true) {
+                        if let Some(sid) = p.get("sessionId").and_then(|v| v.as_str()) {
+                            // sessionId == CID for downloadToUrl.
+                            CIDS.lock().unwrap().push(serde_json::json!({
+                                "cid": sid, "direction": "download",
+                            }));
+                        }
+                    }
+                    emit_file_fetched(&p.to_string());
                 }
             });
         }
