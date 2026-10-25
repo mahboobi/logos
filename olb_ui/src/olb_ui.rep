@@ -1,0 +1,10 @@
+class OlbUi
+{
+    // Phase 0 task 3: QML asks the backend to refresh; the backend calls
+    // olb_core.session_status() and pushes the result into coreStatus.
+    SLOT(void refreshSessionStatus())
+
+    // Auto-synced to every QML replica via QtRO.
+    PROP(QString coreStatus="" READONLY)
+    PROP(bool coreReachable=false READONLY)
+}

@@ -38,3 +38,10 @@ risc0_dev_mode = true
 
 [circuits]
 version = "0.4.1"
+
+[modules]
+olb_core = { path = "olb_core" }
+olb_ui   = { path = "olb_ui" }
+
+[basecamp.profiles.alice]
+[basecamp.profiles.bob]
