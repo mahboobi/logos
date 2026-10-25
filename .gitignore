@@ -11,3 +11,6 @@ build/
 
 # Claude Code personal overrides
 .claude/settings.local.json
+
+# LEZ workspace build output
+/target/
