@@ -20,6 +20,18 @@ Open Labbook (OLB) is a desktop app that runs inside **Logos Basecamp**. Researc
 
 Development runs on Linux (x86_64/aarch64) or macOS only. Basecamp setup needs ~5 GB free memory on first run.
 
+## Local environment notes (macOS, this machine)
+
+- **Nix is not on a non-login shell's PATH.** The installer hooks `/etc/zshrc`
+  and `/etc/bashrc`, which non-interactive shells skip. Every command that needs
+  nix (including `lgs`, which shells out to it) must first run:
+  `. /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh`
+  Verified working: Nix 2.35.4, `experimental-features = nix-command flakes` in
+  `~/.config/nix/nix.conf`.
+- **`timeout` does not exist on macOS.** Use `gtimeout` (coreutils) or omit it.
+- **Keep `runtime_dir` short** — `/tmp/lgs-<profile>` is the macOS default and
+  fits the 104-byte `sun_path` budget; this project's path would overflow it.
+
 ## Decided architecture (25 Oct 2026)
 
 | Decision | Choice | Why |
