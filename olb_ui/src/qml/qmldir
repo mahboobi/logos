@@ -1,0 +1,3 @@
+module com.logos.module.olb_ui
+singleton Theme 1.0 Theme.qml
+Panel 1.0 Panel.qml

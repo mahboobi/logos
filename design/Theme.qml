@@ -16,7 +16,7 @@ QtObject {
     readonly property color ink: "#15181C"
     readonly property color ink2: "#4C535C"
     readonly property color ink3: "#646B73"
-    readonly property color onAccent: "#FFFFFF"
+    readonly property color textOnAccent: "#FFFFFF"  // renamed from onAccent: QML reads on<Upper> as a signal handler
 
     // ---- Semantic
     readonly property color accent: "#0B6E4F"        // done, verified, anchored, primary action

@@ -2,13 +2,15 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-// Phase 0 task 3 skeleton. Deliberately unstyled: design/Theme.qml tokens and
-// the real screens land in Phase 1a (docs/02, docs/03). Nothing here should
-// survive into a shipped screen.
-Item {
+// Phase 0 harness, now on design-system tokens (docs/02). This is still a
+// developer surface, not a product screen: S1-S8 and M1 from docs/03 are
+// Phase 1a. What it does prove is the full seam — typed calls and typed
+// events across QML -> QtRO -> C++ backend -> LogosAPI -> olb_core — plus
+// Theme.qml resolving as a singleton.
+Rectangle {
     id: root
+    color: Theme.ground
 
-    // Typed replica — auto-synced PROPs and callable SLOTs from olb_ui.rep.
     readonly property var backend: logos.module("olb_ui")
     property bool ready: false
 
@@ -16,12 +18,16 @@ Item {
     readonly property bool coreReachable: backend ? backend.coreReachable : false
     readonly property string identity: backend ? backend.identity : ""
     readonly property string recordsJson: backend ? backend.records : "[]"
+    readonly property string cidsJson: backend ? backend.cids : "[]"
+    readonly property string lastStorageResult: backend ? backend.lastStorageResult : ""
 
-    // olb_core hands records over as a JSON string (docs/08 R10).
-    readonly property var recordModel: {
-        try { return JSON.parse(root.recordsJson); } catch (e) { return []; }
+    // olb_core hands records and CIDs over as JSON strings (docs/08 R10).
+    function parseJson(text, fallback) {
+        try { return JSON.parse(text); } catch (e) { return fallback; }
     }
-    readonly property int recordCount: root.recordModel.length
+    readonly property var recordModel: parseJson(root.recordsJson, [])
+    readonly property var cidModel: parseJson(root.cidsJson, [])
+    readonly property var statusObj: parseJson(root.coreStatus, ({}))
 
     Connections {
         target: logos
@@ -30,102 +36,218 @@ Item {
                 root.ready = isReady && root.backend !== null;
         }
     }
-
     Component.onCompleted: {
         root.ready = root.backend !== null && logos.isViewModuleReady("olb_ui");
     }
 
-    ColumnLayout {
+    // A labelled status dot. Colour carries meaning (CLAUDE.md UI rules):
+    // green = verified/done/online, amber = needs attention.
+    component StatusPill: Row {
+        property string label: ""
+        property bool ok: false
+        spacing: Theme.s8
+        Rectangle {
+            width: Theme.s8; height: Theme.s8; radius: width / 2
+            anchors.verticalCenter: parent.verticalCenter
+            color: parent.ok ? Theme.accent : Theme.amber
+        }
+        Text {
+            text: parent.label
+            font.family: Theme.sans
+            font.pixelSize: Theme.small
+            color: parent.ok ? Theme.accent : Theme.amber
+            anchors.verticalCenter: parent.verticalCenter
+        }
+    }
+
+    ScrollView {
         anchors.fill: parent
-        anchors.margins: 24
-        spacing: 16
+        contentWidth: availableWidth
 
-        // No explicit colour: the template's #ffffff was invisible on
-        // Basecamp's light background. Phase 1a replaces this with a
-        // design/Theme.qml token (docs/02).
-        Text {
-            text: "Open Labbook — Phase 0 skeleton"
-            font.pixelSize: 20
-            Layout.alignment: Qt.AlignHCenter
-        }
+        ColumnLayout {
+            width: root.width
+            spacing: Theme.s16
 
-        Text {
-            text: root.ready ? "olb_ui backend connected"
-                             : "Connecting to olb_ui backend..."
-            color: root.ready ? "#56d364" : "#f0883e"
-            font.pixelSize: 12
-        }
-
-        Button {
-            text: "Refresh session status"
-            enabled: root.ready
-            onClicked: root.backend.refreshSessionStatus()
-        }
-
-        Text {
-            text: root.coreReachable ? "olb_core reachable" : "olb_core not reached"
-            color: root.coreReachable ? "#56d364" : "#f0883e"
-            font.pixelSize: 12
-        }
-
-        // The JSON string olb_core.session_status() returns, pushed into the
-        // coreStatus PROP by the backend and synced here over QtRO.
-        Text {
-            text: root.coreStatus === "" ? "No status yet" : root.coreStatus
-            color: "#8b949e"
-            font.pixelSize: 13
-            Layout.fillWidth: true
-            wrapMode: Text.Wrap
-        }
-
-        // ---- Phase 0 task 4: signed records over Delivery ----
-        Rectangle { Layout.fillWidth: true; height: 1; color: "#d0d7de" }
-
-        Text {
-            text: "Identity (ed25519): " + (root.identity === "" ? "—" : root.identity)
-            font.pixelSize: 11
-            color: "#8b949e"
-            Layout.fillWidth: true
-            elide: Text.ElideMiddle
-        }
-
-        RowLayout {
-            spacing: 12
-            Layout.fillWidth: true
-
-            TextField {
-                id: recordTitle
-                placeholderText: "Record title"
+            ColumnLayout {
+                Layout.margins: Theme.s24
                 Layout.fillWidth: true
-            }
+                spacing: Theme.s16
 
-            Button {
-                text: "Publish signed record"
-                enabled: root.ready && recordTitle.text.length > 0
-                onClicked: {
-                    root.backend.publishTestRecord(recordTitle.text);
-                    recordTitle.text = "";
+                Text {
+                    text: "Open Labbook"
+                    font.family: Theme.sans
+                    font.pixelSize: Theme.pageTitle
+                    font.weight: Theme.semibold
+                    font.letterSpacing: Theme.titleSpacing
+                    color: Theme.ink
+                }
+                Text {
+                    text: "Phase 0 harness — not a product screen"
+                    font.family: Theme.sans
+                    font.pixelSize: Theme.meta
+                    color: Theme.ink3
+                }
+
+                RowLayout {
+                    spacing: Theme.s20
+                    StatusPill { label: root.ready ? "olb_ui connected" : "connecting"; ok: root.ready }
+                    StatusPill { label: root.coreReachable ? "olb_core reachable" : "olb_core unreachable"; ok: root.coreReachable }
+                    StatusPill {
+                        label: "delivery " + (root.statusObj.state || "unknown")
+                        ok: root.statusObj.state === "online"
+                    }
+                    StatusPill {
+                        label: "storage " + (root.statusObj.storage || "unknown")
+                        ok: root.statusObj.storage === "online"
+                    }
+                }
+
+                Text {
+                    text: "Identity  " + (root.identity === "" ? "—" : root.identity)
+                    font.family: Theme.mono
+                    font.pixelSize: Theme.fingerprint
+                    color: Theme.violet          // violet = committed/identity material
+                    Layout.fillWidth: true
+                    elide: Text.ElideMiddle
+                }
+
+                Button {
+                    text: "Refresh"
+                    implicitHeight: Theme.touchTarget
+                    enabled: root.ready
+                    onClicked: root.backend.refreshSessionStatus()
                 }
             }
-        }
 
-        Text {
-            text: "Records received (" + root.recordCount + ")"
-            font.pixelSize: 13
-        }
+            // ---- Records (task 4) ----
+            Panel {
+                title: "Signed records"
+                subtitle: root.recordModel.length + " received"
+                Layout.fillWidth: true
+                Layout.leftMargin: Theme.s24
+                Layout.rightMargin: Theme.s24
 
-        ListView {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            clip: true
-            model: root.recordModel
-            delegate: Text {
-                width: ListView.view.width
-                font.pixelSize: 12
-                color: "#8b949e"
-                elide: Text.ElideRight
-                text: "• " + modelData.payload.title
-                      + "   by " + String(modelData.author).substring(0, 16) + "…"
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Theme.s12
+                    TextField {
+                        id: recordTitle
+                        placeholderText: "Record title"
+                        implicitHeight: Theme.touchTarget
+                        Layout.fillWidth: true
+                        font.family: Theme.sans
+                        font.pixelSize: Theme.body
+                    }
+                    Button {
+                        text: "Publish signed record"
+                        implicitHeight: Theme.touchTarget
+                        enabled: root.ready && recordTitle.text.length > 0
+                        onClicked: { root.backend.publishTestRecord(recordTitle.text); recordTitle.text = ""; }
+                    }
+                }
+
+                Repeater {
+                    model: root.recordModel
+                    delegate: Text {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        font.family: Theme.sans
+                        font.pixelSize: Theme.small
+                        color: Theme.ink2
+                        elide: Text.ElideRight
+                        text: "• " + (modelData.payload ? modelData.payload.title : "?")
+                              + "   " + String(modelData.author).substring(0, 16) + "…"
+                    }
+                }
+            }
+
+            // ---- Files (task 5) ----
+            Panel {
+                title: "Files in Logos Storage"
+                subtitle: root.cidModel.length + " CIDs"
+                Layout.fillWidth: true
+                Layout.leftMargin: Theme.s24
+                Layout.rightMargin: Theme.s24
+                Layout.bottomMargin: Theme.s24
+
+                Text {
+                    text: "Absolute paths only — the sandbox means the view never reads the file; "
+                          + "olb_core does the I/O and the UI passes paths and CIDs."
+                    font.family: Theme.sans
+                    font.pixelSize: Theme.meta
+                    color: Theme.ink3
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Theme.s12
+                    TextField {
+                        id: uploadPath
+                        placeholderText: "/absolute/path/to/file"
+                        implicitHeight: Theme.touchTarget
+                        Layout.fillWidth: true
+                        font.family: Theme.mono
+                        font.pixelSize: Theme.small
+                    }
+                    Button {
+                        text: "Upload"
+                        implicitHeight: Theme.touchTarget
+                        enabled: root.ready && uploadPath.text.length > 0
+                        onClicked: root.backend.uploadFile(uploadPath.text)
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Theme.s12
+                    TextField {
+                        id: fetchCid
+                        placeholderText: "CID"
+                        implicitHeight: Theme.touchTarget
+                        Layout.preferredWidth: 220
+                        font.family: Theme.mono
+                        font.pixelSize: Theme.small
+                    }
+                    TextField {
+                        id: fetchDest
+                        placeholderText: "/absolute/destination"
+                        implicitHeight: Theme.touchTarget
+                        Layout.fillWidth: true
+                        font.family: Theme.mono
+                        font.pixelSize: Theme.small
+                    }
+                    Button {
+                        text: "Fetch"
+                        implicitHeight: Theme.touchTarget
+                        enabled: root.ready && fetchCid.text.length > 0 && fetchDest.text.length > 0
+                        onClicked: root.backend.fetchFile(fetchCid.text, fetchDest.text)
+                    }
+                }
+
+                Repeater {
+                    model: root.cidModel
+                    delegate: Text {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        font.family: Theme.mono
+                        font.pixelSize: Theme.meta
+                        color: Theme.ink2
+                        elide: Text.ElideMiddle
+                        text: (modelData.direction === "upload" ? "↑ " : "↓ ") + modelData.cid
+                    }
+                }
+
+                Text {
+                    visible: root.lastStorageResult !== ""
+                    text: root.lastStorageResult
+                    font.family: Theme.mono
+                    font.pixelSize: Theme.meta
+                    color: Theme.ink3
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                }
             }
         }
     }

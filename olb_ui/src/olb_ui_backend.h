@@ -21,8 +21,15 @@ class OlbUiBackend : public OlbUiSimpleSource,
 public:
     void refreshSessionStatus() override;
     void publishTestRecord(QString title) override;
+    void uploadFile(QString absPath) override;
+    void fetchFile(QString cid, QString absDest) override;
 
     /// Fires when ui-host hands the plugin its LogosAPI, so subscriptions are
     /// live before the view makes its first call.
     void onContextReady() override;
+
+private:
+    /// Pull olb_core's current view into the PROPs. olb_core owns ordering and
+    /// dedup, so the UI re-reads rather than maintaining its own copy.
+    void syncFromCore();
 };

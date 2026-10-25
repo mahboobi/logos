@@ -1,17 +1,27 @@
 class OlbUi
 {
-    // Phase 0 task 3: QML asks the backend to refresh; the backend calls
-    // olb_core.session_status() and pushes the result into coreStatus.
+    // ---- Phase 0 task 3: session status ----
     SLOT(void refreshSessionStatus())
 
-    // Phase 0 task 4: sign and publish a test record on the Delivery topic.
+    // ---- Phase 0 task 4: signed records over Delivery ----
     SLOT(void publishTestRecord(QString title))
 
-    // Auto-synced to every QML replica via QtRO.
+    // ---- Phase 0 task 5: files through Logos Storage ----
+    // Absolute paths only: the module sandbox means QML never reads the file,
+    // it passes a path and olb_core does the I/O (CLAUDE.md constraint 2 —
+    // never pass file contents through the UI, pass CIDs and paths).
+    SLOT(void uploadFile(QString absPath))
+    SLOT(void fetchFile(QString cid, QString absDest))
+
+    // ---- Auto-synced to every QML replica via QtRO ----
     PROP(QString coreStatus="" READONLY)
     PROP(bool coreReachable=false READONLY)
     // JSON array of verified records received from peers, newest first.
     PROP(QString records="[]" READONLY)
     // This node's ed25519 signing-key fingerprint.
     PROP(QString identity="" READONLY)
+    // JSON array of {cid, direction} this node has uploaded or fetched.
+    PROP(QString cids="[]" READONLY)
+    // Last storage outcome, as the module's own JSON result envelope.
+    PROP(QString lastStorageResult="" READONLY)
 }
