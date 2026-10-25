@@ -7,12 +7,15 @@
   "category": "productivity",
   "description": "Open Labbook core: identity, records, version control, sync, storage and anchoring",
   "main": "olb_core_plugin",
-  "dependencies": [],
-
+  "dependencies": [
+    "delivery_module"
+  ],
   "codegen": {
-    "rust": { "crate": "rust-lib", "trait": "OlbCoreModule" }
+    "rust": {
+      "crate": "rust-lib",
+      "trait": "OlbCoreModule"
+    }
   },
-
   "nix": {
     "packages": {
       "build": [],

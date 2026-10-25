@@ -4,7 +4,14 @@ class OlbUi
     // olb_core.session_status() and pushes the result into coreStatus.
     SLOT(void refreshSessionStatus())
 
+    // Phase 0 task 4: sign and publish a test record on the Delivery topic.
+    SLOT(void publishTestRecord(QString title))
+
     // Auto-synced to every QML replica via QtRO.
     PROP(QString coreStatus="" READONLY)
     PROP(bool coreReachable=false READONLY)
+    // JSON array of verified records received from peers, newest first.
+    PROP(QString records="[]" READONLY)
+    // This node's ed25519 signing-key fingerprint.
+    PROP(QString identity="" READONLY)
 }

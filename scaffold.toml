@@ -21,6 +21,10 @@ pin = "d3af2972f51d9c542537d80d60ad8d20282ddcd1"
 build = "nix-flake"
 attr = "cli"
 
+[modules.delivery_module]
+flake = "github:logos-co/logos-delivery-module/1d995bda3128e13f21ed17e0f925f4c04d2bd117#lgx"
+role = "dependency"
+
 [modules.olb_core]
 flake = "path:./olb_core#lgx"
 role = "project"

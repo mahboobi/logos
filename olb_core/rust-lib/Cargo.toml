@@ -18,6 +18,11 @@ crate-type = ["staticlib"]
 
 [dependencies]
 serde_json = "1"
+# Audited crates only (CLAUDE.md engineering rules). ed25519-dalek signs and
+# verifies every record; no home-made primitives.
+ed25519-dalek = "2"
+rand = "0.8"
+hex = "0.4"
 # Staged by the builder from the same logos-rust-sdk revision its code
 # generator comes from, so there is no generator/runtime skew to manage.
 logos-rust-sdk = { path = "../logos-rust-sdk-src" }

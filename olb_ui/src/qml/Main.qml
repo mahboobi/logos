@@ -14,6 +14,14 @@ Item {
 
     readonly property string coreStatus: backend ? backend.coreStatus : ""
     readonly property bool coreReachable: backend ? backend.coreReachable : false
+    readonly property string identity: backend ? backend.identity : ""
+    readonly property string recordsJson: backend ? backend.records : "[]"
+
+    // olb_core hands records over as a JSON string (docs/08 R10).
+    readonly property var recordModel: {
+        try { return JSON.parse(root.recordsJson); } catch (e) { return []; }
+    }
+    readonly property int recordCount: root.recordModel.length
 
     Connections {
         target: logos
@@ -70,6 +78,55 @@ Item {
             wrapMode: Text.Wrap
         }
 
-        Item { Layout.fillHeight: true }
+        // ---- Phase 0 task 4: signed records over Delivery ----
+        Rectangle { Layout.fillWidth: true; height: 1; color: "#d0d7de" }
+
+        Text {
+            text: "Identity (ed25519): " + (root.identity === "" ? "—" : root.identity)
+            font.pixelSize: 11
+            color: "#8b949e"
+            Layout.fillWidth: true
+            elide: Text.ElideMiddle
+        }
+
+        RowLayout {
+            spacing: 12
+            Layout.fillWidth: true
+
+            TextField {
+                id: recordTitle
+                placeholderText: "Record title"
+                Layout.fillWidth: true
+            }
+
+            Button {
+                text: "Publish signed record"
+                enabled: root.ready && recordTitle.text.length > 0
+                onClicked: {
+                    root.backend.publishTestRecord(recordTitle.text);
+                    recordTitle.text = "";
+                }
+            }
+        }
+
+        Text {
+            text: "Records received (" + root.recordCount + ")"
+            font.pixelSize: 13
+        }
+
+        ListView {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            clip: true
+            model: root.recordModel
+            delegate: Text {
+                width: ListView.view.width
+                font.pixelSize: 12
+                color: "#8b949e"
+                elide: Text.ElideRight
+                text: "• " + modelData.payload.title
+                      + "   by " + String(modelData.author).substring(0, 16) + "…"
+            }
+        }
     }
 }

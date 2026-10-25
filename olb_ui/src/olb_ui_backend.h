@@ -20,6 +20,7 @@ class OlbUiBackend : public OlbUiSimpleSource,
 {
 public:
     void refreshSessionStatus() override;
+    void publishTestRecord(QString title) override;
 
     /// Fires when ui-host hands the plugin its LogosAPI, so subscriptions are
     /// live before the view makes its first call.
