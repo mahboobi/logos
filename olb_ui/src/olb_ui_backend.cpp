@@ -34,6 +34,33 @@ void OlbUiBackend::refreshBoard()
 {
     setBoard(modules().olb_core.board());
     setFixtures(modules().olb_core.fixtures_enabled());
+    setNotes(modules().olb_core.notes());
+    setProjects(modules().olb_core.projects());
+    setProfile(modules().olb_core.profile());
+}
+
+void OlbUiBackend::createProject(QString title, QString summary, QString privacy)
+{
+    setLastActionResult(modules().olb_core.create_project(title, summary, privacy));
+    refreshBoard();
+}
+
+void OlbUiBackend::createNote(QString title, QString body)
+{
+    setLastActionResult(modules().olb_core.create_note(title, body));
+    refreshBoard();
+}
+
+void OlbUiBackend::promoteNote(QString noteId, QString projectId, QString stage)
+{
+    setLastActionResult(modules().olb_core.promote_note(noteId, projectId, stage));
+    refreshBoard();
+}
+
+void OlbUiBackend::saveProfile(QString name, QString orcid)
+{
+    setLastActionResult(modules().olb_core.set_profile(name, orcid));
+    refreshBoard();
 }
 
 void OlbUiBackend::refreshSessionStatus()
@@ -81,6 +108,11 @@ void OlbUiBackend::onContextReady()
         setLastStorageResult(result);
         setCids(modules().olb_core.stored_cids());
         setCoreStatus(modules().olb_core.session_status());
+    });
+
+    // Any store change (project, note, profile) refreshes every screen.
+    modules().olb_core.onStore_changed([this](QString) {
+        refreshBoard();
     });
 
     modules().olb_core.onFile_fetched([this](QString result) {

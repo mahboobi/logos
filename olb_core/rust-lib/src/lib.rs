@@ -63,6 +63,28 @@ pub trait OlbCoreModule: Send + 'static {
     /// Whether this module is serving fixtures rather than live data.
     fn fixtures_enabled(&mut self) -> bool;
 
+    /// Create a project. Produces a signed commit. Returns the project JSON.
+    fn create_project(&mut self, title: String, summary: String, privacy: String) -> String;
+
+    /// Personal notebook: a private note, not part of any project.
+    fn create_note(&mut self, title: String, body: String) -> String;
+
+    /// Every personal note, newest first, as a JSON array.
+    fn notes(&mut self) -> String;
+
+    /// Promote a personal note into an idea on a project, entering at the
+    /// named stage ("Idea", "Hypothesis", "Experiments" or "Data").
+    fn promote_note(&mut self, note_id: String, project_id: String, stage: String) -> String;
+
+    /// The local profile (name, orcid, fingerprint) as JSON.
+    fn profile(&mut self) -> String;
+
+    /// Update the local profile. Produces a signed commit.
+    fn set_profile(&mut self, name: String, orcid: String) -> String;
+
+    /// Projects this node knows about, as a JSON array.
+    fn projects(&mut self) -> String;
+
     /// Called once the module is wired to the host. `ctx` carries the
     /// host-stamped instance id and persistence path.
     fn on_context_ready(&mut self, _ctx: &RustModuleContext) {}
@@ -78,6 +100,8 @@ pub trait OlbCoreModuleEvents {
     fn file_stored(&self, result_json: String);
     /// Fires when a download completes; payload carries `sessionId`.
     fn file_fetched(&self, result_json: String);
+    /// Fires whenever the local store changes (project, note, profile).
+    fn store_changed(&self, summary_json: String);
 }
 
 // The builder injects the generated scaffold here — the `install` entry point,
@@ -144,6 +168,42 @@ impl Default for OlbCore {
 }
 
 impl OlbCore {
+    /// Append a signed commit. CLAUDE.md: every user-visible action that
+    /// changes data produces one, and history is never rewritten.
+    fn commit(&mut self, st: &mut serde_json::Value, action: &str, payload: serde_json::Value) {
+        use ed25519_dalek::Signer;
+        let parent = st
+            .get("commits")
+            .and_then(|c| c.as_array())
+            .and_then(|a| a.last())
+            .and_then(|c| c.get("id"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        let body = serde_json::json!({
+            "action": action,
+            "payload": payload,
+            "parent": parent,
+            "at": now_ms(),
+            "author": self.author_hex(),
+        });
+        let bytes = serde_json::to_vec(&body).unwrap_or_default();
+        let sig = self.signing.sign(&bytes);
+        // The commit id is the hash of the signed body, so the DAG is
+        // content-addressed the way docs/05 expects.
+        let id = hex::encode(<sha2::Sha256 as sha2::Digest>::digest(&bytes));
+
+        let entry = serde_json::json!({
+            "id": id,
+            "body": body,
+            "sig": hex::encode(sig.to_bytes()),
+        });
+        if let Some(a) = st["commits"].as_array_mut() {
+            a.push(entry);
+        }
+    }
+
     fn author_hex(&self) -> String {
         hex::encode(self.signing.verifying_key().to_bytes())
     }
@@ -154,10 +214,96 @@ impl OlbCore {
 /// Live data replaces the body of each accessor, not its shape.
 const FIXTURES: &str = include_str!("../fixtures/sample-project.json");
 
-/// Fixture mode is on unless OLB_FIXTURES=0. Phase 1a has no record store to
-/// read from yet, so the default is on; it flips once Phase 1b lands.
+/// Fixture mode is OFF by default now that the store is real; set
+/// OLB_FIXTURES=1 to render the sample project instead (useful for comparing
+/// a screen against design/canvas without creating data).
 fn fixtures_on() -> bool {
-    !matches!(std::env::var("OLB_FIXTURES").as_deref(), Ok("0"))
+    matches!(std::env::var("OLB_FIXTURES").as_deref(), Ok("1"))
+}
+
+
+// ---------------------------------------------------------------------------
+// Durable store (docs/08 R6).
+//
+// `lgs basecamp launch` scrubs the whole profile tree on EVERY launch,
+// including module_data/, so instance_persistence_path() cannot hold anything
+// that must outlive a relaunch. The store therefore lives outside that tree,
+// keyed by LOGOS_PROFILE so alice and bob never share state.
+//
+// This is deliberately a plain JSON file, not SQLite: Phase 0 needs
+// durability and an auditable commit log, not query power. Phase 1b can
+// migrate the same shapes into SQLite without changing the module API.
+// ---------------------------------------------------------------------------
+mod store {
+    use serde_json::{json, Value};
+    use std::path::PathBuf;
+
+    pub fn dir() -> PathBuf {
+        let profile = std::env::var("LOGOS_PROFILE").unwrap_or_else(|_| "default".into());
+        let base = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+        // Outside .scaffold/basecamp/profiles/<p>/ on purpose — that tree is
+        // what launch deletes.
+        PathBuf::from(base)
+            .join("Library/Application Support/OpenLabbook")
+            .join(profile)
+    }
+
+    pub fn path() -> PathBuf {
+        dir().join("store.json")
+    }
+
+    pub fn load() -> Value {
+        match std::fs::read_to_string(path()) {
+            Ok(text) => serde_json::from_str(&text).unwrap_or_else(|_| empty()),
+            Err(_) => empty(),
+        }
+    }
+
+    pub fn save(v: &Value) -> Result<(), String> {
+        std::fs::create_dir_all(dir()).map_err(|e| e.to_string())?;
+        // Write-then-rename so a crash mid-write cannot truncate the store.
+        let tmp = path().with_extension("json.tmp");
+        std::fs::write(&tmp, serde_json::to_vec_pretty(v).map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?;
+        std::fs::rename(&tmp, path()).map_err(|e| e.to_string())
+    }
+
+    pub fn empty() -> Value {
+        json!({
+            "v": 1,
+            "profile": {"name": "", "orcid": ""},
+            "projects": [],
+            "notes": [],
+            "commits": [],
+        })
+    }
+}
+
+/// Stage names in the order the board uses them.
+const STAGES: [&str; 6] = ["Idea", "Hypothesis", "Funding", "Experiments", "Data", "Publish"];
+
+/// 1-based stage index for a stage name, accepting the aliases the UI offers
+/// ("Experiment", "Data/Results").
+fn stage_index(name: &str) -> Option<usize> {
+    let n = name.trim().to_ascii_lowercase();
+    let n = match n.as_str() {
+        "experiment" => "experiments",
+        "data/results" | "results" => "data",
+        other => other,
+    };
+    STAGES
+        .iter()
+        .position(|s| s.to_ascii_lowercase() == n)
+        .map(|i| i + 1)
+}
+
+fn new_id(prefix: &str) -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let n = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    format!("{prefix}-{n:x}")
 }
 
 /// Storage events carry a single `payload: tstr` holding JSON — unwrap the
@@ -212,6 +358,17 @@ fn session_json(identity: &str) -> String {
         "cids":     CIDS.lock().unwrap().len(),
     })
     .to_string()
+}
+
+/// Announce that the durable store changed, so every view refreshes.
+fn announce_store() {
+    let st = store::load();
+    let summary = serde_json::json!({
+        "projects": st.get("projects").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0),
+        "notes":    st.get("notes").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0),
+        "commits":  st.get("commits").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0),
+    });
+    emit_store_changed(&summary.to_string());
 }
 
 /// Announce the current session state. Without this the view keeps whatever it
@@ -285,23 +442,274 @@ impl OlbCoreModule for OlbCore {
         }
     }
 
+    fn projects(&mut self) -> String {
+        store::load()
+            .get("projects")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!([]))
+            .to_string()
+    }
+
+    fn notes(&mut self) -> String {
+        let st = store::load();
+        let mut notes = st
+            .get("notes")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
+        notes.reverse(); // newest first
+        serde_json::Value::Array(notes).to_string()
+    }
+
+    fn profile(&mut self) -> String {
+        let st = store::load();
+        let p = st.get("profile").cloned().unwrap_or_else(|| serde_json::json!({}));
+        serde_json::json!({
+            "name":        p.get("name").and_then(|v| v.as_str()).unwrap_or(""),
+            "orcid":       p.get("orcid").and_then(|v| v.as_str()).unwrap_or(""),
+            "fingerprint": self.author_hex(),
+            "profileDir":  store::dir().to_string_lossy(),
+        })
+        .to_string()
+    }
+
+    fn set_profile(&mut self, name: String, orcid: String) -> String {
+        let mut st = store::load();
+        st["profile"] = serde_json::json!({"name": name, "orcid": orcid});
+        self.commit(&mut st, "profile.update", serde_json::json!({"name": name, "orcid": orcid}));
+        match store::save(&st) {
+            Ok(()) => {
+                announce_store();
+                self.profile()
+            }
+            Err(e) => record::err("internal", &e),
+        }
+    }
+
+    fn create_project(&mut self, title: String, summary: String, privacy: String) -> String {
+        if title.trim().is_empty() {
+            return record::err("invalid", "a project needs a title");
+        }
+        let mut st = store::load();
+        let project = serde_json::json!({
+            "id": new_id("proj"),
+            "title": title.trim(),
+            "summary": summary.trim(),
+            "privacy": if privacy.trim().is_empty() { "Private · project group" } else { privacy.trim() },
+            "createdAt": now_ms(),
+            "author": self.author_hex(),
+            "ideas": [],
+        });
+        st["projects"]
+            .as_array_mut()
+            .map(|a| a.push(project.clone()));
+        self.commit(&mut st, "project.create", project.clone());
+        match store::save(&st) {
+            Ok(()) => {
+                announce_store();
+                project.to_string()
+            }
+            Err(e) => record::err("internal", &e),
+        }
+    }
+
+    fn create_note(&mut self, title: String, body: String) -> String {
+        if title.trim().is_empty() {
+            return record::err("invalid", "a note needs a title");
+        }
+        let mut st = store::load();
+        let note = serde_json::json!({
+            "id": new_id("note"),
+            "title": title.trim(),
+            "body": body,
+            "createdAt": now_ms(),
+            "author": self.author_hex(),
+            "promoted": serde_json::Value::Null,
+        });
+        st["notes"].as_array_mut().map(|a| a.push(note.clone()));
+        self.commit(&mut st, "note.create", note.clone());
+        match store::save(&st) {
+            Ok(()) => {
+                announce_store();
+                note.to_string()
+            }
+            Err(e) => record::err("internal", &e),
+        }
+    }
+
+    fn promote_note(&mut self, note_id: String, project_id: String, stage: String) -> String {
+        let Some(stage_no) = stage_index(&stage) else {
+            return record::err(
+                "invalid",
+                &format!("unknown stage '{stage}'; expected one of {STAGES:?}"),
+            );
+        };
+        let mut st = store::load();
+
+        // The note is kept, not consumed: records are append-only, so
+        // promotion marks the note and adds an idea rather than moving it.
+        let note = st
+            .get("notes")
+            .and_then(|v| v.as_array())
+            .and_then(|a| a.iter().find(|n| n.get("id").and_then(|i| i.as_str()) == Some(&note_id)))
+            .cloned();
+        let Some(note) = note else {
+            return record::err("not_found", &format!("no note {note_id}"));
+        };
+
+        let idea = serde_json::json!({
+            "id": new_id("idea"),
+            "stage": stage_no,
+            "published": false,
+            "title": note.get("title").and_then(|v| v.as_str()).unwrap_or(""),
+            "summary": note.get("body").and_then(|v| v.as_str()).unwrap_or(""),
+            "privacy": "Private · project group",
+            "facts": [
+                {"k": "Hypothesis", "v": "Not yet"},
+                {"k": "Funding",    "v": "Not started"},
+                {"k": "Notebook",   "v": "1 entry"},
+                {"k": "Data",       "v": "None yet"},
+            ],
+            "branch": "main",
+            "headCommit": "",
+            "headMessage": format!("Promoted from personal note at stage {}", STAGES[stage_no - 1]),
+            "commitSummary": "1 commit",
+            "lead": st.pointer("/profile/name").and_then(|v| v.as_str()).unwrap_or("You"),
+            "people": "1 person",
+            "updated": "just now",
+            "open": note.get("id").and_then(|v| v.as_str()).unwrap_or(""),
+            "fromNote": note_id,
+        });
+
+        let mut attached = false;
+        if let Some(projects) = st["projects"].as_array_mut() {
+            for p in projects.iter_mut() {
+                if p.get("id").and_then(|i| i.as_str()) == Some(&project_id) {
+                    p["ideas"].as_array_mut().map(|a| a.push(idea.clone()));
+                    attached = true;
+                    break;
+                }
+            }
+        }
+        if !attached {
+            return record::err("not_found", &format!("no project {project_id}"));
+        }
+
+        if let Some(notes) = st["notes"].as_array_mut() {
+            for n in notes.iter_mut() {
+                if n.get("id").and_then(|i| i.as_str()) == Some(&note_id) {
+                    n["promoted"] = serde_json::json!({
+                        "projectId": project_id, "stage": STAGES[stage_no - 1],
+                    });
+                }
+            }
+        }
+
+        self.commit(&mut st, "note.promote", idea.clone());
+        match store::save(&st) {
+            Ok(()) => {
+                announce_store();
+                idea.to_string()
+            }
+            Err(e) => record::err("internal", &e),
+        }
+    }
+
     fn fixtures_enabled(&mut self) -> bool {
         fixtures_on()
     }
 
     fn board(&mut self) -> String {
-        if !fixtures_on() {
-            // Phase 1b replaces this with the record store.
-            return record::err("not_found", "live board needs the record store (Phase 1b)");
+        if fixtures_on() {
+            return match serde_json::from_str::<serde_json::Value>(FIXTURES) {
+                Ok(v) => v
+                    .get("board")
+                    .cloned()
+                    .unwrap_or_else(|| serde_json::json!({}))
+                    .to_string(),
+                Err(e) => record::err("internal", &format!("fixture parse failed: {e}")),
+            };
         }
-        match serde_json::from_str::<serde_json::Value>(FIXTURES) {
-            Ok(v) => v
-                .get("board")
-                .cloned()
-                .unwrap_or_else(|| serde_json::json!({}))
-                .to_string(),
-            Err(e) => record::err("internal", &format!("fixture parse failed: {e}")),
-        }
+
+        // Live board, built from the durable store. Same shape as the
+        // fixture so the view does not change (docs/03 S1).
+        let st = store::load();
+        let projects = st.get("projects").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+        let commits = st.get("commits").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0);
+
+        // One board per node for now: the first project, or an empty shell.
+        let current = projects.last().cloned();
+        let ideas = current
+            .as_ref()
+            .and_then(|p| p.get("ideas"))
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
+        let published = ideas
+            .iter()
+            .filter(|i| i.get("published").and_then(|v| v.as_bool()) == Some(true))
+            .count();
+
+        let title = current
+            .as_ref()
+            .and_then(|p| p.get("title"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("No project yet")
+            .to_string();
+        let privacy = current
+            .as_ref()
+            .and_then(|p| p.get("privacy"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("Private · project group")
+            .to_string();
+
+        let node_ready = *NODE_READY.lock().unwrap();
+        let storage_ready = *STORAGE_READY.lock().unwrap();
+        let cids = CIDS.lock().unwrap().len();
+        let received = RECEIVED.lock().unwrap().len();
+
+        serde_json::json!({
+            "projectId": current.as_ref().and_then(|p| p.get("id")).cloned(),
+            "title": title,
+            "badges": [
+                {"kind": "neutral", "text": privacy},
+                {"kind": "neutral", "text": format!("{} idea{}", ideas.len(), if ideas.len() == 1 { "" } else { "s" })},
+                {"kind": "done",    "text": format!("{published} published")},
+            ],
+            "status": {
+                "sync": {
+                    "label": "Live sync",
+                    "value": if node_ready { "Delivery online" } else { "Offline" },
+                    "sub": if node_ready {
+                        "Edits arrive over Logos Delivery, end-to-end encrypted"
+                    } else {
+                        "Changes are saved locally"
+                    },
+                },
+                "copies": {
+                    "label": "Copies of project files",
+                    "value": format!("{cids} file{} in Logos Storage", if cids == 1 { "" } else { "s" }),
+                    "warning": if storage_ready { "" } else { "Storage is offline" },
+                },
+                "history": {
+                    "label": "Version history",
+                    "value": format!("{commits} signed commit{}", if commits == 1 { "" } else { "s" }),
+                    "sub": format!("{received} record{} received from peers", if received == 1 { "" } else { "s" }),
+                },
+            },
+            "stagesUsed": STAGES,
+            "ideas": ideas,
+            "activity": st.get("commits").and_then(|v| v.as_array()).map(|a| {
+                a.iter().rev().take(8).map(|c| serde_json::json!({
+                    "text": format!("{} · {}",
+                        c.pointer("/body/action").and_then(|v| v.as_str()).unwrap_or(""),
+                        c.get("id").and_then(|v| v.as_str()).unwrap_or("").chars().take(8).collect::<String>()),
+                    "link": "",
+                    "time": "",
+                })).collect::<Vec<_>>()
+            }).unwrap_or_default(),
+        })
+        .to_string()
     }
 
     fn stored_cids(&mut self) -> String {

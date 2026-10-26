@@ -1,5 +1,22 @@
 # 03 — Screens
 
+> **Amended 26 Oct 2026** (by request, after seeing S1 running). These changes
+> supersede the handoff copy where they conflict:
+>
+> - Nav label "Board" is now **"Public Board"**, and "Notebook" is
+>   **"Personal Notebook"**.
+> - A **Settings** screen is added (profile name + ORCID, signing-key
+>   fingerprint, store location, service status). Not in the original nine.
+> - **New project** is a nav destination, not only an action on S1.
+> - The Personal Notebook is a new concept: private notes belonging to no
+>   project, each **promotable into a project idea entering at a chosen
+>   stage** — Idea, Hypothesis, Experiments or Data. Funding and Publish are
+>   deliberately not entry points. Promotion is append-only: the note is
+>   marked promoted and kept, and a new idea is added to the project.
+>
+> Screens S2–S7 and M1 below are unchanged and still unbuilt.
+
+
 Nine surfaces: eight screens and one multi-step modal. Each section lists the design source file in `design/canvas/`, layout, content, data bindings (`olb_core` methods from `docs/06-core-module-api.md`), states and interactions. Exact copy is in the `.dc.html` files; quoted strings below are the important ones.
 
 All screens use `AppShell` with `SideNav` (`docs/02-design-system.md`). The active nav item is noted per screen. Sample content comes from `fixtures/sample-project.json`.

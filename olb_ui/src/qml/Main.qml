@@ -11,24 +11,42 @@ Rectangle {
 
     readonly property var backend: logos.module("olb_ui")
     property bool ready: false
-    property string screen: "Board"
+    property string screen: "Public Board"
 
     readonly property var boardData: {
         try { return JSON.parse(backend ? backend.board : "{}"); } catch (e) { return ({}); }
     }
     readonly property bool fixtures: backend ? backend.fixtures : false
 
+    function parseJson(text, fallback) {
+        try { return JSON.parse(text); } catch (e) { return fallback; }
+    }
+    readonly property var notesModel: parseJson(backend ? backend.notes : "[]", [])
+    readonly property var projectsModel: parseJson(backend ? backend.projects : "[]", [])
+    readonly property var profileObj: parseJson(backend ? backend.profile : "{}", ({}))
+
     // docs/03 nav. `done` marks what actually exists today.
     readonly property var navItems: [
-        { label: "Board",       done: true  },
-        { label: "Notebook",    done: false },
-        { label: "Hypotheses",  done: false },
-        { label: "Funding",     done: false },
-        { label: "Publish",     done: false },
-        { label: "History",     done: false },
-        { label: "Members",     done: false },
-        { label: "Diagnostics", done: true  }
+        { label: "Public Board",      done: true  },
+        { label: "Personal Notebook", done: true  },
+        { label: "New project",       done: true  },
+        { label: "Hypotheses",        done: false },
+        { label: "Funding",           done: false },
+        { label: "Publish",           done: false },
+        { label: "History",           done: false },
+        { label: "Members",           done: false },
+        { label: "Settings",          done: true  },
+        { label: "Diagnostics",       done: true  }
     ]
+    function screenIndex(name) {
+        switch (name) {
+        case "Public Board":      return 0;
+        case "Personal Notebook": return 1;
+        case "New project":       return 2;
+        case "Settings":          return 3;
+        default:                  return 4;   // Diagnostics
+        }
+    }
 
     Connections {
         target: logos
@@ -68,13 +86,28 @@ Rectangle {
                 anchors.margins: Theme.s12
                 spacing: Theme.s2
 
-                Text {
-                    text: "Open Labbook"
-                    font.family: Theme.sans
-                    font.pixelSize: Theme.small
-                    font.weight: Theme.semibold
-                    color: Theme.ink
+                RowLayout {
+                    Layout.fillWidth: true
                     Layout.margins: Theme.s8
+                    spacing: Theme.s8
+                    Image {
+                        source: "../assets/icon.png"
+                        sourceSize.width: 24
+                        sourceSize.height: 24
+                        Layout.preferredWidth: 24
+                        Layout.preferredHeight: 24
+                        fillMode: Image.PreserveAspectFit
+                        Accessible.role: Accessible.Graphic
+                        Accessible.name: "Open Labbook"
+                    }
+                    Text {
+                        text: "Open Labbook"
+                        font.family: Theme.sans
+                        font.pixelSize: Theme.small
+                        font.weight: Theme.semibold
+                        color: Theme.ink
+                        Layout.fillWidth: true
+                    }
                 }
 
                 Repeater {
@@ -120,7 +153,7 @@ Rectangle {
         StackLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            currentIndex: root.screen === "Board" ? 0 : 1
+            currentIndex: root.screenIndex(root.screen)
 
             Board {
                 boardData: root.boardData
@@ -133,6 +166,23 @@ Rectangle {
                 onOpenHistory: function (ideaId) {
                     console.log("[olb_ui] open history for:", ideaId);
                 }
+            }
+
+            Notebook {
+                backend: root.backend
+                notes: root.notesModel
+                projects: root.projectsModel
+            }
+
+            NewProject {
+                backend: root.backend
+                onCreated: root.screen = "Public Board"
+            }
+
+            Settings {
+                backend: root.backend
+                profile: root.profileObj
+                coreStatus: root.backend ? root.backend.coreStatus : ""
             }
 
             Diagnostics {

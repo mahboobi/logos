@@ -179,6 +179,30 @@ labelled and deleted, but it cannot be sent into or invited to." Messages persis
 as history; identity does not. `docs/04` §1 stands, and D2 (Delivery-only) is the
 right call.
 
+### R6 — Durable state across a relaunch (PARTLY RESOLVED 26 Oct 2026)
+`lgs basecamp launch` scrubs the whole profile tree on every launch, so
+`instancePersistencePath()` cannot hold anything that must outlive it. The
+store therefore lives **outside** that tree:
+
+```
+~/Library/Application Support/OpenLabbook/<LOGOS_PROFILE>/store.json
+```
+
+`LOGOS_PROFILE` is exported per profile by `launch`, so alice and bob stay
+isolated. Writes go to a temp file and are renamed, so a crash mid-write
+cannot truncate the store. Projects, notes, the profile and the signed commit
+log all survive a relaunch now.
+
+Deliberately a JSON file, not SQLite: Phase 0 needs durability and an
+auditable append-only commit log, not query power. The same shapes can move
+into SQLite in Phase 1b without changing the module API.
+
+**Still open:** the ed25519 signing key is NOT yet persisted — it is
+regenerated on every launch, so a node's identity (and therefore the author on
+every commit) changes between runs. Settings says so on screen. Durable
+identity needs the key sealed at rest, which is a key-management decision, not
+just a file write.
+
 ### R12 — LEZ anchoring end to end (RESOLVED 25 Oct 2026)
 `lgs create --template lez-framework` ships `src/bin/run_lez_counter.rs` with
 `// TODO: submit transaction via wallet` in every subcommand: it parses
