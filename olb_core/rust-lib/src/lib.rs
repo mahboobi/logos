@@ -116,6 +116,8 @@ static SEEN_HASHES: Mutex<Vec<String>> = Mutex::new(Vec::new());
 static NODE_READY: Mutex<bool> = Mutex::new(false);
 static STORAGE_READY: Mutex<bool> = Mutex::new(false);
 static CIDS: Mutex<Vec<serde_json::Value>> = Mutex::new(Vec::new());
+/// Published so the bring-up thread can build a status snapshot without the impl.
+static IDENTITY_HEX: Mutex<String> = Mutex::new(String::new());
 
 struct OlbCore {
     signing: ed25519_dalek::SigningKey,
@@ -176,22 +178,34 @@ fn verify(bytes: &[u8]) -> Option<serde_json::Value> {
     Some(v)
 }
 
+/// The session snapshot, shared by `session_status()` and the
+/// `session_changed` event so the two can never disagree.
+fn session_json(identity: &str) -> String {
+    serde_json::json!({
+        "module":   "olb_core",
+        "version":  env!("CARGO_PKG_VERSION"),
+        "state":    if *NODE_READY.lock().unwrap() { "online" } else { "offline" },
+        "identity": identity,
+        "topic":    RECORD_TOPIC,
+        "projects": 0,
+        "records":  RECEIVED.lock().unwrap().len(),
+        "storage":  if *STORAGE_READY.lock().unwrap() { "online" } else { "offline" },
+        "cids":     CIDS.lock().unwrap().len(),
+    })
+    .to_string()
+}
+
+/// Announce the current session state. Without this the view keeps whatever it
+/// read during onContextReady — which is BEFORE the deferred bring-up finishes,
+/// so delivery and storage show "offline" forever even after they come up.
+fn announce_session() {
+    let identity = IDENTITY_HEX.lock().unwrap().clone();
+    emit_session_changed(&session_json(&identity));
+}
+
 impl OlbCoreModule for OlbCore {
     fn session_status(&mut self) -> String {
-        let node_ready = *NODE_READY.lock().unwrap();
-        let received = RECEIVED.lock().unwrap().len();
-        serde_json::json!({
-            "module":    "olb_core",
-            "version":   env!("CARGO_PKG_VERSION"),
-            "state":     if node_ready { "online" } else { "offline" },
-            "identity":  self.author_hex(),
-            "topic":     RECORD_TOPIC,
-            "projects":  0,
-            "records":   received,
-            "storage":   if *STORAGE_READY.lock().unwrap() { "online" } else { "offline" },
-            "cids":      CIDS.lock().unwrap().len(),
-        })
-        .to_string()
+        session_json(&self.author_hex())
     }
 
     fn identity_fingerprint(&mut self) -> String {
@@ -266,6 +280,7 @@ impl OlbCoreModule for OlbCore {
         // recognized (re-exchange failed)"}. The SDK's own single re-exchange
         // retry also fires too early to help. Bring-up runs off-thread with
         // backoff instead.
+        *IDENTITY_HEX.lock().unwrap() = self.author_hex();
         let persistence = ctx.instance_persistence_path.clone();
         std::thread::spawn(move || bring_up(&persistence));
     }
@@ -314,6 +329,7 @@ fn bring_up(persistence_path: &str) {
                     if let Some(e) = delivery_module::DeliveryModuleClient::decode_node_started(&ev)
                     {
                         *NODE_READY.lock().unwrap() = e.success;
+                        announce_session();
                         if e.success {
                             retry_call("delivery subscribe", || {
                                 modules().delivery_module.subscribe(RECORD_TOPIC)
@@ -355,6 +371,7 @@ fn bring_up(persistence_path: &str) {
                     };
                     RECEIVED.lock().unwrap().push(rec.clone());
                     emit_record_received(&rec.to_string());
+                    announce_session();
                 }
             });
         }
@@ -385,6 +402,7 @@ fn bring_up(persistence_path: &str) {
         retry_call("storage init", || modules().storage_module.init(&storage_cfg)).is_some()
             && retry_call("storage start", || modules().storage_module.start()).is_some();
     *STORAGE_READY.lock().unwrap() = storage_up;
+    announce_session();
 
     if storage_up {
         let mut ms = modules();
