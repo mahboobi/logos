@@ -226,21 +226,33 @@ attacker reads the science regardless. "Private project" is currently a claim
 about the network, not about the disk. Encrypting the store is a separate,
 larger change that was considered and deferred at the same time.
 
-### R12 — LEZ anchoring end to end (RESOLVED 25 Oct 2026)
+### R12 — LEZ anchoring end to end (RESOLVED 25 Oct 2026; re-verified per-project 26 Oct 2026)
 `lgs create --template lez-framework` ships `src/bin/run_lez_counter.rs` with
 `// TODO: submit transaction via wallet` in every subcommand: it parses
 arguments, loads the program ELF, prints a line and returns. Nothing reaches
 the sequencer. `olb_registry`'s runner inherits that gap and says so on stderr
 rather than printing a success line it has not earned.
 
-**Resolved.** An anchor is on the local sequencer:
+**Resolved.** Anchors are on the local sequencer. Re-verified 26 Oct 2026
+after the per-project PDA change (docs/05 §4), with **two** projects anchored
+under one `program_id` to prove they no longer share a slot:
 
 ```
-tx_hash  3b1f92568204cd550823341365772faa7b99e4fd2aed7a881bb1711e3369608b
-account  Public/GU8Kt6X1rVhArDEksz4smhwTPVgrNcBSroguc2GRNszG
-data     0300000000000000 c3e9f97c...e9c3   (count=3 LE u64 ++ 32-byte root)
-balance  0
+program_id  2439aae61197b93d1b5dd3ff3983136e3a5357c8a1679ceb9c6829e9df803f93
+
+proj-alpha  tx c1fdb77213bc99e9201670c77f4809e9f29fdbff60255c8ed331e8d5cb989cf8
+            Public/Akqd59AmFn1A3CjFd2TKyNmWtisq5ERuoNkUTAtiKm2M
+            data 0700000000000000 aaaa…aa11   balance 0
+
+proj-beta   tx 078d23681e6b852ffc87de46d9c4a59bf0bfd76aca5ad778867ff1b79eedf239
+            Public/2WXZoi82H2h9Tde6v9uY5YpRBefmw9KtnjQDq7GzjshB
+            data 0300000000000000 bbbb…bb22   balance 0
 ```
+
+Two tags, two accounts, each holding its own `(count, root)`. Under the old
+`literal("olb_registry")` seed both would have resolved to the same account and
+the second anchor would have overwritten the first. The pre-change anchor
+(`tx 3b1f9256…`, account `GU8Kt6X1…`) belongs to a now-orphaned `program_id`.
 
 Sequencer: "Validated transaction ..., including it in block". `balance: 0`
 confirms writing state to `data` rather than `balance` avoids the
@@ -277,6 +289,27 @@ the embedded constant addresses a program the sequencer has never seen and the
 transaction fails the execution check with `InvalidInput("Unknown program")` —
 after being accepted and returning a tx_hash, so it looks like success. Pass
 `--program-path <docker elf>` to the runner, or deploy the local build.
+
+**Two anchors from one authority in the same block window: the second is
+dropped.** Submitting `proj-alpha` and `proj-beta` back to back gave
+`InvalidInput("Nonce mismatch")` on the second — both runs read the authority's
+nonce before either transaction landed, so the second carried a stale one. The
+sequencer logs `skipping it`; the runner had already printed a success line.
+Resubmitting the identical anchor worked. **Consequence for the anchoring
+queue:** submissions sharing a signing authority must be serialised, one
+confirmed before the next is built, or anchors silently disappear. One flush
+per authority at a time, and treat a `tx_hash` as a receipt only after reading
+the account back.
+
+**`cargo build` on its own cannot build the host runner on this machine.** The
+`olb_methods` build script runs `risc0_build::embed_methods()`, which builds the
+guest with the *local* risc0 toolchain, and `ring`'s C build then gets host
+macOS flags (`-arch arm64`, `-mmacosx-version-min=…`, `-gfull`) handed to
+`riscv32-unknown-elf-gcc`, which rejects all three. Use `lgs build`, which
+routes the guest through the container builder and links the host crates
+afterwards. Not worth fixing while `lgs build` works, but it does mean a bare
+`cargo build`/`cargo test` at the workspace root fails for reasons that have
+nothing to do with the code being changed.
 
 Still open: `lgs localnet start` returns once the sequencer is up, and the
 sequencer dies with the shell that spawned it; run it detached. There is no

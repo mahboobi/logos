@@ -26,16 +26,19 @@ pub fn parse_program_id_hex(s: &str) -> Result<ProgramId, String> {
 }
 
 /// Compute PDA for the `registry` account.
-pub fn compute_registry_pda(program_id: &ProgramId) -> AccountId {
+pub fn compute_registry_pda(program_id: &ProgramId, project_tag: &str) -> AccountId {
     let seed_const_0 = spel_framework_core::pda::seed_from_str("olb_registry");
+    let project_tag_seed = spel_framework_core::pda::seed_from_str(project_tag);
     spel_framework_core::pda::compute_pda(program_id, &[
         &seed_const_0,
+        &project_tag_seed,
     ])
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum OlbRegistryInstruction {
     Anchor {
+        project_tag: String,
         root: [u8; 32],
         count: u64,
     },
@@ -59,10 +62,12 @@ impl<'w> OlbRegistryClient<'w> {
     pub async fn anchor(
         &self,
         accounts: AnchorAccounts,
+        project_tag: String,
         root: [u8; 32],
         count: u64,
     ) -> Result<String, String> {
         let instruction = OlbRegistryInstruction::Anchor {
+            project_tag,
             root,
             count,
         };
@@ -94,8 +99,9 @@ impl<'w> OlbRegistryClient<'w> {
     /// Fetch and deserialize the `registry` account state.
     pub async fn fetch_registry<T: BorshDeserialize>(
         &self,
+        project_tag: &str,
     ) -> Result<T, String> {
-        let account_id = compute_registry_pda(&self.program_id);
+        let account_id = compute_registry_pda(&self.program_id, project_tag);
         let account = self.wallet.sequencer_client
             .get_account(account_id).await
             .map_err(|e| format!("fetch registry: {}", e))?;

@@ -453,26 +453,27 @@ fast-forward freely.
 ### 5.1 What the deployed program actually takes
 
 `methods/guest/src/bin/olb_registry.rs` is
-`anchor(registry, authority, root: [u8;32], count: u64)`, writing 40 bytes
-`count LE || root` into **one** PDA seeded `literal("olb_registry")`.
+`anchor(registry, authority, project_tag: String, root: [u8;32], count: u64)`,
+writing 40 bytes `count LE || root` into a PDA seeded
+`[r#const("olb_registry"), arg("project_tag")]` — **one slot per project**.
 
-Two gaps against docs/05 §4:
+One gap against docs/05 §4 remains:
 
-- **There is no `project_tag`.** docs/05 says
-  `olb_registry.anchor(project_tag, root, count)`. The program has no tag
-  argument and no per-project PDA seed, so every project in the deployment
-  shares one 40-byte slot and each anchor **overwrites** the previous one. The
-  source wins: the design below works with one slot. Adding
-  `pda = ...` over a `tag: [u8;32]` argument is the minimal program change that
-  restores docs/05's per-project privacy story, and it is a **blocker for
-  Phase 2** (`project_tag = H(project_id || project_salt)` is the only thing
-  keeping project identity off-chain).
 - docs/05 says **"sorted pair hashing"**. Rejected — see §5.3.
+
+Resolved 26 Oct 2026: the program took no `project_tag` until then, so every
+project in a deployment shared a single 40-byte slot. `spel` turned out to
+support `const` / `account` / `arg` seeds already
+(`spel-framework-macros/src/lib.rs:757`), so this was a seed change, not a
+redesign. `project_tag = H(project_id || project_salt)` is what keeps project
+identity off-chain, and it was a Phase 2 blocker; fixing it before Phase 1b
+anchors real history cost one `program_id` and one orphaned test anchor.
 
 ### 5.2 Cumulative tree, not per-batch
 
-Because the slot is overwritten, the anchored root is a **cumulative,
-append-only tree over every commit anchored so far**, not a per-batch tree.
+Each project's slot is overwritten on every anchor, so that project's anchored
+root is a **cumulative, append-only tree over every commit anchored so far**,
+not a per-batch tree.
 `count` is the total number of leaves, so the newest `(count, root)` pair is
 sufficient to verify **any** earlier commit, given its leaf index. A per-batch
 tree would leave every root but the last unverifiable the moment the next batch
@@ -694,8 +695,8 @@ Merkle proofs, invite sealing and key rotation. The last two are `docs/04`.
 | 3 | no tree / state root | added `tree` to the header | Without it, divergent histories with identical change lists are indistinguishable, snapshots have nothing to verify against, and merge must replay the DAG. |
 | 4 | record `parents[]` | kept for derivation; added `prev[]` for the version chain | docs/05 overloads one field for two relations. A merged version has two predecessors, so `prev` is a `Vec`. |
 | 5 | "sorted pair hashing" | RFC 6962 position-aware hashing, domain-separated leaves, no last-leaf duplication | Sorted pairs discard the left/right bit, which enables forged inclusion proofs and breaks multiproofs. Costs nothing: `(index, size)` already give the sides. |
-| 6 | per-batch root; "store each commit's Merkle path" | one **cumulative** append-only tree; store the **leaf index**, recompute paths | The deployed program has one overwritten PDA, so only the newest root is readable on-chain — a per-batch root is unverifiable the moment the next batch lands, and an older leaf's path grows as the tree grows. |
-| 7 | `anchor(project_tag, root, count)` | **the program has no `project_tag`** — all projects share one PDA | Source wins. Flagged as a Phase 2 blocker: without a per-tag PDA seed, docs/05 §4's "the chain does not reveal project identity" is not delivered. Needs a program change, which needs your sign-off. |
+| 6 | per-batch root; "store each commit's Merkle path" | one **cumulative** append-only tree per project; store the **leaf index**, recompute paths | The program overwrites each project's PDA, so only that project's newest root is readable on-chain — a per-batch root is unverifiable the moment the next batch lands, and an older leaf's path grows as the tree grows. |
+| 7 | `anchor(project_tag, root, count)` | matches, as of 26 Oct 2026 | Originally a mismatch — the program had no tag and all projects shared one PDA, which would have broken docs/05 §4's "the chain does not reveal project identity". Fixed by seeding the PDA `[r#const("olb_registry"), arg("project_tag")]`, which `spel` already supported. |
 | 8 | "text fields diffed by line/word" | that is the **diff** rule; merge treats text as opaque | Auto-stitching two scientists' prose can fabricate an observation nobody wrote. |
 | 9 | "Merges into `main` need N approvals" | direct non-merge commits to `main` are **allowed**; only merges are gated | Literal reading. Flag if you meant `main` to be push-protected too — it is a one-line change in `apply_commit`. |
 | 10 | approvals, no binding stated | approvals sign `(mr_id, source_head, target_head)` and go stale when a head moves | Otherwise "approve, then push" defeats review completely. |

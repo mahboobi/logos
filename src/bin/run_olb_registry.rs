@@ -1,7 +1,9 @@
 //! Host runner for the olb_registry LEZ program (Phase 0 task 6).
 //!
-//! `anchor` submits a Merkle root over an OLB record stream, plus the leaf
-//! count, to the registry PDA. `show` reads the anchored state back.
+//! `anchor` submits a Merkle root over one project's record stream, plus the
+//! leaf count, to that project's registry PDA. Each project gets its own
+//! account: the PDA seeds are `["olb_registry", project_tag]`, so two projects
+//! anchoring in the same block do not overwrite each other.
 //!
 //! Submission goes through the generated client (`lgs build client`), which
 //! owns nonce lookup, signing-key retrieval, witness-set construction and the
@@ -32,6 +34,9 @@ struct Cli {
 enum Command {
     /// Anchor a 32-byte Merkle root and its leaf count on the sequencer.
     Anchor {
+        /// Project tag; second PDA seed, so each project anchors independently.
+        #[arg(long)]
+        project: String,
         /// Signing authority account id (a self-owned public account).
         #[arg(long)]
         authority: String,
@@ -42,8 +47,23 @@ enum Command {
         #[arg(long)]
         count: u64,
     },
-    /// Print the registry PDA for this program.
-    Pda,
+    /// Print one project's registry PDA for this program.
+    Pda {
+        /// Project tag; second PDA seed.
+        #[arg(long)]
+        project: String,
+    },
+}
+
+/// The tag is hashed into a PDA seed, so any non-empty string works. Reject the
+/// empty one: it would silently give every untagged caller the same account,
+/// which is the collision this argument exists to prevent.
+fn parse_project_tag(raw: &str) -> anyhow::Result<String> {
+    let tag = raw.trim();
+    if tag.is_empty() {
+        return Err(anyhow!("--project must not be empty"));
+    }
+    Ok(tag.to_owned())
 }
 
 fn parse_root(raw: &str) -> anyhow::Result<[u8; 32]> {
@@ -61,21 +81,24 @@ async fn main() -> anyhow::Result<()> {
     let program_id = program.id();
 
     match cli.command {
-        Command::Pda => {
-            println!("{}", compute_registry_pda(&program_id));
+        Command::Pda { project } => {
+            let tag = parse_project_tag(&project)?;
+            println!("{}", compute_registry_pda(&program_id, &tag));
         }
 
         Command::Anchor {
+            project,
             authority,
             root,
             count,
         } => {
+            let tag = parse_project_tag(&project)?;
             let authority_id = parse_account_id(&authority);
             let root_bytes = parse_root(&root)?;
-            // The registry account is derived, not supplied: its seed is fixed
-            // in the program (`pda = literal("olb_registry")`), so accepting
-            // one from the caller would only let them pass the wrong account.
-            let registry = compute_registry_pda(&program_id);
+            // The registry account is derived, not supplied: the program fixes
+            // its seeds as `["olb_registry", project_tag]`, so accepting one
+            // from the caller would only let them pass the wrong account.
+            let registry = compute_registry_pda(&program_id, &tag);
 
             let client = OlbRegistryClient::new(&wallet_core, program_id);
             let tx_hash = client
@@ -84,6 +107,7 @@ async fn main() -> anyhow::Result<()> {
                         registry,
                         authority: authority_id,
                     },
+                    tag.clone(),
                     root_bytes,
                     count,
                 )
@@ -92,7 +116,10 @@ async fn main() -> anyhow::Result<()> {
 
             println!("submitted transaction: tx_hash={tx_hash}");
             println!("registry account: {registry}");
-            println!("anchored count={count} root={}", hex::encode(root_bytes));
+            println!(
+                "anchored project={tag} count={count} root={}",
+                hex::encode(root_bytes)
+            );
             println!(
                 "verification hint: lgs wallet -- account get --account-id Public/{registry}"
             );

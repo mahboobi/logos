@@ -77,8 +77,9 @@ Stored encrypted with the idea key (or project key for project-level types) unle
 
 - Queue commit ids locally. On flush, build a Merkle tree (SHA-256, sorted pair hashing) and call `olb_registry.anchor(project_tag, root, count)`.
   - **Implemented 26 Oct 2026.** The registry account is a PDA seeded
-    `[const("olb_registry"), arg("project_tag")]`, so each project gets its own
-    account. The first cut used `literal("olb_registry")` alone, which resolved
+    `[r#const("olb_registry"), arg("project_tag")]`, so each project gets its
+    own account. The raw-identifier form is required: `const` is a Rust
+    keyword, so plain `const(...)` is a parse error inside the attribute. The first cut used `literal("olb_registry")` alone, which resolved
     to ONE account for every project on every node — concurrent anchors from
     two members silently overwrote each other. Changing it mints a new
     `program_id`, so anchors made before this change are orphaned; only the one
@@ -88,6 +89,11 @@ Stored encrypted with the idea key (or project key for project-level types) unle
     pairs allow a second-preimage forgery. Where the two disagree, docs/10
     wins and this line should be updated when the tree is implemented.
 - Store each commit's Merkle path with the batch number. "Verify proof" recomputes the root and checks it against the program account.
+- **One flush in flight per signing authority.** LEZ nonces are per signer
+  account, so two anchors built before the first lands carry the same nonce and
+  the sequencer skips the second with `InvalidInput("Nonce mismatch")` —
+  after accepting it and returning a `tx_hash`. Serialise submissions and treat
+  an anchor as landed only once the account reads back (docs/08 R12).
 - Flush policy from project settings: every change / every few minutes (default; target 5 min or 100 commits) / daily / key moments only (pre-registration, milestone, publication — always flush immediately at these).
 - `project_tag` = `H(project_id || project_salt)` for Private/Invite-only projects so the chain does not reveal project identity.
 - Commitments (hypothesis, idea) are separate calls: `olb_registry.commit(tag, fingerprint)`; reveal = publishing salt + record; verification recomputes the fingerprint.

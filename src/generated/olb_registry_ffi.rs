@@ -29,6 +29,10 @@ static PROGRAM_IDL_JSON: &str = "{
               {
                 \"kind\": \"const\",
                 \"value\": \"olb_registry\"
+              },
+              {
+                \"kind\": \"arg\",
+                \"path\": \"project_tag\"
               }
             ]
           },
@@ -43,6 +47,10 @@ static PROGRAM_IDL_JSON: &str = "{
         }
       ],
       \"args\": [
+        {
+          \"name\": \"project_tag\",
+          \"type\": \"string\"
+        },
         {
           \"name\": \"root\",
           \"type\": {
@@ -70,6 +78,7 @@ use serde::{Serialize, Deserialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum OlbRegistryInstruction {
     Anchor {
+        project_tag: String,
         root: [u8; 32],
         count: u64,
     },
@@ -165,12 +174,14 @@ fn olb_registry_anchor_impl(args: &str) -> Result<String, String> {
     let program_id = parse_program_id_hex(v["program_id_hex"].as_str().ok_or("missing program_id_hex")?)?;
     let wallet = init_wallet(&v)?;
 
+    let project_tag = v["project_tag"].as_str().ok_or("expected string")?.to_string();
     let root = parse_bytes32(v["root"].as_str().ok_or("expected string for [u8; 32]")?)?;
     let count = { let _v = &v["count"]; if let Some(_s) = _v.as_str() { _s.parse::<u64>().map_err(|_| format!("invalid u64: {}", _s))? } else { _v.as_u64().ok_or("expected u64")? } };
 
     let authority = parse_account_id(v["authority"].as_str().ok_or("missing authority")?)?;
     let registry = compute_pda_with_program(&program_id, &[
         b"olb_registry",
+        project_tag.as_bytes(),
     ])?;
 
     let account_ids: Vec<AccountId> = vec![
@@ -182,6 +193,7 @@ fn olb_registry_anchor_impl(args: &str) -> Result<String, String> {
     ];
 
     let instruction = OlbRegistryInstruction::Anchor {
+        project_tag,
         root,
         count,
     };
@@ -416,12 +428,19 @@ fn olb_registry_decode_account_impl(args: &str) -> Result<String, String> {
 }
 
 /// Compute PDA for `registry` account.
-/// Seeds: [const("olb_registry")]
-pub fn compute_registry_pda(program_id: &ProgramId) -> AccountId {
-    let mut seed_bytes = [0u8; 32];
-    let src = b"olb_registry";
-    seed_bytes[..src.len()].copy_from_slice(src);
-    let pda_seed = nssa_core::program::PdaSeed::new(seed_bytes);
+/// Seeds: [const("olb_registry"), arg(project_tag)]
+pub fn compute_registry_pda(program_id: &ProgramId, project_tag: &String) -> AccountId {
+    use sha2::{Sha256, Digest};
+    let mut hasher = Sha256::new();
+    {
+        let mut padded = [0u8; 32];
+        let src = b"olb_registry";
+        padded[..src.len()].copy_from_slice(src);
+        hasher.update(&padded);
+    }
+    hasher.update(project_tag as &[u8]);
+    let combined: [u8; 32] = hasher.finalize().into();
+    let pda_seed = nssa_core::program::PdaSeed::new(combined);
     AccountId::for_public_pda(program_id, &pda_seed)
 }
 
@@ -438,8 +457,10 @@ fn olb_registry_fetch_registry_impl(args_str: &str) -> Result<String, String> {
     let args: serde_json::Value = serde_json::from_str(args_str).map_err(|e| format!("invalid JSON: {e}"))?;
     let program_id = parse_program_id_hex(args["program_id_hex"].as_str().ok_or("missing program_id_hex")?)?;
     let wallet = init_wallet(&args)?;
+        let project_tag = args["project_tag"].as_str().ok_or("expected string")?.to_string();
     let pda = compute_pda_with_program(&program_id, &[
         b"olb_registry",
+        project_tag.as_bytes(),
     ])?;
     let rt = get_runtime();
     let account = rt.block_on(async {
