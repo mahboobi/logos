@@ -83,10 +83,11 @@ Item {
                         Layout.fillWidth: true
                     }
 
-                    Button {
-                        text: "Refresh"
-                        implicitHeight: Theme.touchTarget
-                        Accessible.name: "Refresh the board"
+                    IconButton {
+                        pathData: Icons.refresh
+                        viewBox: Icons.refreshViewBox
+                        accessibleName: "Refresh the board"
+                        tooltip: "Refresh"
                         onClicked: board.refresh()
                     }
                     Button {

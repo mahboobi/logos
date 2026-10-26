@@ -1,5 +1,6 @@
 module com.logos.module.olb_ui
 singleton Theme 1.0 Theme.qml
+singleton Icons 1.0 Icons.qml
 Panel 1.0 Panel.qml
 Badge 1.0 Badge.qml
 StatusCard 1.0 StatusCard.qml
@@ -17,3 +18,4 @@ Entry 1.0 Entry.qml
 History 1.0 History.qml
 Members 1.0 Members.qml
 PrimaryButton 1.0 PrimaryButton.qml
+IconButton 1.0 IconButton.qml
