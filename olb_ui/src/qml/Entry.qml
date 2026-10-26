@@ -240,10 +240,9 @@ Item {
                         // its own signed commit, so it cannot be local state.
                         onClicked: console.log("[olb_ui] mark as negative result:", entry.recordId)
                     }
-                    Button {
+                    PrimaryButton {
                         text: "Sign and share with group"
                         implicitHeight: Theme.touchTarget
-                        highlighted: true
                         Accessible.name: "Sign and share with group"
                         // TODO(phase1b): needs record.commit(recordId, message).
                         onClicked: console.log("[olb_ui] sign and share:", entry.recordId)

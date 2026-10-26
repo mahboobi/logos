@@ -12,6 +12,10 @@
               {
                 "kind": "const",
                 "value": "olb_registry"
+              },
+              {
+                "kind": "arg",
+                "path": "project_tag"
               }
             ]
           },
@@ -26,6 +30,10 @@
         }
       ],
       "args": [
+        {
+          "name": "project_tag",
+          "type": "string"
+        },
         {
           "name": "root",
           "type": {

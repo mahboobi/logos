@@ -81,10 +81,8 @@ Item {
                     RowLayout {
                         Layout.fillWidth: true
                         Item { Layout.fillWidth: true }
-                        Button {
+                        PrimaryButton {
                             text: "Save profile"
-                            implicitHeight: Theme.touchTarget
-                            highlighted: true
                             enabled: !!screen.backend
                             onClicked: screen.backend.saveProfile(nameField.text, orcidField.text)
                         }

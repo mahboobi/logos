@@ -575,10 +575,8 @@ Item {
                             implicitHeight: Theme.touchTarget
                             onClicked: screen.cancelled()
                         }
-                        Button {
+                        PrimaryButton {
                             text: "Create project"
-                            implicitHeight: Theme.touchTarget
-                            highlighted: true
                             enabled: titleField.text.trim().length > 0 && screen.backend
                             onClicked: {
                                 var kw = keywordsField.text.split(",")

@@ -95,11 +95,9 @@ Item {
                         Accessible.name: "New notebook entry"
                         onClicked: board.newEntry()
                     }
-                    Button {
+                    PrimaryButton {
                         text: "New project"
-                        implicitHeight: Theme.touchTarget
-                        highlighted: true
-                        Accessible.name: "New project"
+                        accessibleName: "New project"
                         onClicked: board.newProject()
                     }
                 }

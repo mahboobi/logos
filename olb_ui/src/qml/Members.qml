@@ -175,11 +175,10 @@ Item {
                         color: Theme.ink
                         Layout.fillWidth: true
                     }
-                    Button {
+                    PrimaryButton {
                         id: inviteButton
                         text: "Invite member"
                         implicitHeight: Theme.touchTarget
-                        highlighted: true
                         Accessible.name: "Invite member"
                         onClicked: inviteModal.openFresh()
                     }
@@ -597,11 +596,10 @@ Item {
                                         }
                                     }
 
-                                    Button {
+                                    PrimaryButton {
                                         visible: awaiting
                                         text: "Review"
                                         implicitHeight: Theme.touchTarget
-                                        highlighted: true
                                         Accessible.name: "Review the request from " + (modelData.requester || "a new node")
                                         onClicked: inviteModal.openReview(modelData)
                                     }
@@ -1666,11 +1664,10 @@ Item {
                         Accessible.name: "Invite another member"
                         onClicked: { inviteModal.reset(); idField.forceActiveFocus(); }
                     }
-                    Button {
+                    PrimaryButton {
                         id: primaryButton
                         text: inviteModal.primaryLabel
                         implicitHeight: Theme.touchTarget
-                        highlighted: true
                         enabled: inviteModal.canContinue
                         Accessible.name: inviteModal.primaryLabel
                         onClicked: inviteModal.advance()
@@ -1731,10 +1728,9 @@ Item {
                                 Accessible.name: "Keep editing"
                                 onClicked: inviteModal.confirmDiscard = false
                             }
-                            Button {
+                            PrimaryButton {
                                 text: "Discard"
                                 implicitHeight: Theme.touchTarget
-                                highlighted: true
                                 Accessible.name: "Discard this invite"
                                 onClicked: { inviteModal.confirmDiscard = false; inviteModal.close(); }
                             }

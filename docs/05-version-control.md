@@ -76,6 +76,17 @@ Stored encrypted with the idea key (or project key for project-level types) unle
 ## 4. Anchoring on LEZ
 
 - Queue commit ids locally. On flush, build a Merkle tree (SHA-256, sorted pair hashing) and call `olb_registry.anchor(project_tag, root, count)`.
+  - **Implemented 26 Oct 2026.** The registry account is a PDA seeded
+    `[const("olb_registry"), arg("project_tag")]`, so each project gets its own
+    account. The first cut used `literal("olb_registry")` alone, which resolved
+    to ONE account for every project on every node — concurrent anchors from
+    two members silently overwrote each other. Changing it mints a new
+    `program_id`, so anchors made before this change are orphaned; only the one
+    test anchor existed, so nothing real was lost.
+  - Note docs/10-vcs-design.md specifies RFC 6962 hashing (prefixed leaves,
+    no last-leaf duplication) rather than sorted pair hashing, because sorted
+    pairs allow a second-preimage forgery. Where the two disagree, docs/10
+    wins and this line should be updated when the tree is implemented.
 - Store each commit's Merkle path with the batch number. "Verify proof" recomputes the root and checks it against the program account.
 - Flush policy from project settings: every change / every few minutes (default; target 5 min or 100 commits) / daily / key moments only (pre-registration, milestone, publication — always flush immediately at these).
 - `project_tag` = `H(project_id || project_salt)` for Private/Invite-only projects so the chain does not reveal project identity.

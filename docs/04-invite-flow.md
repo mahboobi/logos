@@ -1,5 +1,32 @@
 # 04 — Identity and invites
 
+> **Amended 26 Oct 2026 — key hierarchy corrected (decided with the user).**
+>
+> §6's `project_key → wraps → idea_key` is a **correctness bug**, not a
+> simplification: anyone holding the project key can derive every idea key, so
+> the "Selected ideas" grant in M1 controls nothing. A reviewer invited to one
+> idea could read the whole project.
+>
+> **The decided model is hybrid:**
+> - `project_key` covers project-level metadata and membership records only —
+>   the cheap shared things every member needs.
+> - **Each idea has its own independent content key**, not derived from and not
+>   wrapped by the project key. Access to an idea is an explicit grant, sealed
+>   per member per idea.
+>
+> Consequences that must be implemented together, not piecemeal:
+> - An invite seals N idea keys, not one project key.
+> - Removing a member rotates `project_key` plus only the idea keys that member
+>   actually held — not every key in the project.
+> - Granting access later is a new sealed grant in a signed commit, so it is
+>   auditable in history.
+> - Removal is **forward-only**. A member who already held an idea key can
+>   still read everything they received before removal; rotation protects new
+>   content only. The UI must not imply otherwise.
+>
+> See docs/11-identity-design.md for the vault, sealing and rotation detail.
+
+
 ## 1. What the Logos docs establish (verified 25 Oct 2026)
 
 - **Logos Chat identity is ephemeral on testnet.** `chat_module.init()` creates a new account on every launch, so `get_address()` changes each time Basecamp restarts. Conversations and history are not persisted. Users exchange the hex address out of band to start a 1:1 conversation. ([Chat getting started](https://docs.logos.co/messaging/get-started/send-1-1-messages-logos-chat), [Chat module API](https://docs.logos.co/messaging/chat-module/build-logos-module-that-uses-chat-module-api))

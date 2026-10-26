@@ -16,3 +16,4 @@ ChoiceCard 1.0 ChoiceCard.qml
 Entry 1.0 Entry.qml
 History 1.0 History.qml
 Members 1.0 Members.qml
+PrimaryButton 1.0 PrimaryButton.qml

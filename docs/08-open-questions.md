@@ -203,6 +203,29 @@ every commit) changes between runs. Settings says so on screen. Durable
 identity needs the key sealed at rest, which is a key-management decision, not
 just a file write.
 
+### R13 — Signing key is unsealed on disk (OPEN, deliberate — decided 26 Oct 2026)
+The ed25519 signing key is stored as raw bytes at mode 0600 in
+`~/Library/Application Support/OpenLabbook/<LOGOS_PROFILE>/identity.key`.
+Anyone who can read that file can sign commits as this node.
+
+**Decided: accept this for now**, because sealing it means a passphrase prompt
+on every single launch — `lgs basecamp launch` scrubs the profile tree, so
+there is nowhere to cache an unlocked session — and that lands directly in the
+two-profile test loop. docs/11-identity-design.md specifies the Argon2id +
+ChaCha20-Poly1305 vault that replaces it.
+
+**This is a blocker with a named trigger, not a vague intention. Seal the key
+BEFORE any of these happen:**
+1. a build is given to anyone outside this machine, or
+2. any real (non-fixture) research data is entered, or
+3. the app is pointed at anything other than a local testnet.
+
+Also still true and worth not forgetting: sealing the key alone does **not**
+protect content. Records sit in `store.json` in cleartext, so a file-copy
+attacker reads the science regardless. "Private project" is currently a claim
+about the network, not about the disk. Encrypting the store is a separate,
+larger change that was considered and deferred at the same time.
+
 ### R12 — LEZ anchoring end to end (RESOLVED 25 Oct 2026)
 `lgs create --template lez-framework` ships `src/bin/run_lez_counter.rs` with
 `// TODO: submit transaction via wallet` in every subcommand: it parses

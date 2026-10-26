@@ -68,10 +68,8 @@ Item {
                     RowLayout {
                         Layout.fillWidth: true
                         Item { Layout.fillWidth: true }
-                        Button {
+                        PrimaryButton {
                             text: "Add note"
-                            implicitHeight: Theme.touchTarget
-                            highlighted: true
                             enabled: noteTitle.text.trim().length > 0 && screen.backend
                             onClicked: {
                                 screen.backend.createNote(noteTitle.text, noteBody.text);
