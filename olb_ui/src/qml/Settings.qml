@@ -105,8 +105,17 @@ Item {
                         Layout.fillWidth: true
                     }
                     Text {
-                        text: "The private key never leaves olb_core. This key is regenerated "
-                              + "on every launch until durable identity lands (docs/08 R6)."
+                        text: "The private key never leaves olb_core, and it now persists across "
+                              + "launches, so this node keeps one identity."
+                        font.family: Theme.sans
+                        font.pixelSize: Theme.meta
+                        color: Theme.ink3
+                        wrapMode: Text.Wrap
+                        Layout.fillWidth: true
+                    }
+                    Text {
+                        text: "Stored unsealed at mode 0600 beside the store. Anyone who can read "
+                              + "that file is this node. Sealing at rest is still to come."
                         font.family: Theme.sans
                         font.pixelSize: Theme.meta
                         color: Theme.amber

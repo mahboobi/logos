@@ -161,14 +161,61 @@ struct OlbCore {
 
 impl Default for OlbCore {
     fn default() -> Self {
-        // Phase 0: an ephemeral per-launch key. Durable identity needs a store
-        // that survives `lgs basecamp launch`, which scrubs the profile tree —
-        // that is task 7 / docs/08 R6, deliberately not solved here.
-        use rand::RngCore;
-        let mut seed = [0u8; 32];
-        rand::rngs::OsRng.fill_bytes(&mut seed);
-        OlbCore { signing: ed25519_dalek::SigningKey::from_bytes(&seed) }
+        OlbCore { signing: load_or_create_key() }
     }
+}
+
+/// Load this node's signing key, generating it on first run.
+///
+/// The key lives beside the store, outside the tree `lgs basecamp launch`
+/// scrubs, so a node keeps one identity across relaunches. Without this every
+/// launch produced a new author and the commit log was incoherent between
+/// runs (docs/08 R6).
+///
+/// SECURITY, stated plainly: the key is written UNSEALED at mode 0600. Anyone
+/// who can read the file is this node. That is the same posture as an
+/// unencrypted ~/.ssh private key and is acceptable only for a testnet
+/// developer build. Sealing at rest is specified in docs/11-identity-design.md
+/// and supersedes this; the on-disk format is versioned so the migration is
+/// mechanical.
+fn load_or_create_key() -> ed25519_dalek::SigningKey {
+    use rand::RngCore;
+
+    let path = store::dir().join("identity.key");
+
+    if let Ok(bytes) = std::fs::read(&path) {
+        if bytes.len() == 32 {
+            let mut seed = [0u8; 32];
+            seed.copy_from_slice(&bytes);
+            return ed25519_dalek::SigningKey::from_bytes(&seed);
+        }
+        eprintln!(
+            "[olb_core] identity.key is {} bytes, expected 32 — refusing to use it \
+             and generating a new identity; move the old file aside to investigate",
+            bytes.len()
+        );
+    }
+
+    let mut seed = [0u8; 32];
+    rand::rngs::OsRng.fill_bytes(&mut seed);
+
+    if let Err(e) = std::fs::create_dir_all(store::dir()) {
+        eprintln!("[olb_core] cannot create key dir: {e}; identity will not persist");
+        return ed25519_dalek::SigningKey::from_bytes(&seed);
+    }
+    if let Err(e) = std::fs::write(&path, seed) {
+        eprintln!("[olb_core] cannot write identity key: {e}; identity will not persist");
+        return ed25519_dalek::SigningKey::from_bytes(&seed);
+    }
+    // Owner-only. Do this before anyone else can open it.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Err(e) = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)) {
+            eprintln!("[olb_core] cannot chmod 0600 the identity key: {e}");
+        }
+    }
+    ed25519_dalek::SigningKey::from_bytes(&seed)
 }
 
 impl OlbCore {

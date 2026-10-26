@@ -13,3 +13,4 @@ Diagnostics 1.0 Diagnostics.qml
 FormSection 1.0 FormSection.qml
 FieldLabel 1.0 FieldLabel.qml
 ChoiceCard 1.0 ChoiceCard.qml
+Entry 1.0 Entry.qml
