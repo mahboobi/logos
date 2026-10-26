@@ -233,17 +233,31 @@ impl OlbCore {
             .to_string();
 
         let body = serde_json::json!({
+            // Inside the signature on purpose: a version field outside it is a
+            // downgrade lever (docs/10 §7).
+            "v": 1,
             "action": action,
             "payload": payload,
             "parent": parent,
             "at": now_ms(),
             "author": self.author_hex(),
         });
-        let bytes = serde_json::to_vec(&body).unwrap_or_default();
-        let sig = self.signing.sign(&bytes);
-        // The commit id is the hash of the signed body, so the DAG is
-        // content-addressed the way docs/05 expects.
-        let id = hex::encode(<sha2::Sha256 as sha2::Digest>::digest(&bytes));
+        // Canonical bytes, domain-separated. Both the id and the signature
+        // cover the same preimage, so a signature cannot be lifted onto a
+        // different message type (docs/10 §1).
+        let canon_bytes = match canon::to_vec(&body) {
+            Ok(b) => b,
+            Err(e) => {
+                eprintln!("[olb_core] refusing to commit non-canonical body: {}", e.0);
+                return;
+            }
+        };
+        let mut preimage = Vec::with_capacity(COMMIT_DOMAIN.len() + canon_bytes.len());
+        preimage.extend_from_slice(COMMIT_DOMAIN);
+        preimage.extend_from_slice(&canon_bytes);
+
+        let sig = self.signing.sign(&preimage);
+        let id = hex::encode(<sha2::Sha256 as sha2::Digest>::digest(&preimage));
 
         let entry = serde_json::json!({
             "id": id,
@@ -356,6 +370,110 @@ fn new_id(prefix: &str) -> String {
         .unwrap_or(0);
     format!("{prefix}-{n:x}")
 }
+
+
+// ---------------------------------------------------------------------------
+// Canonical serialization (docs/10 §1).
+//
+// Commit ids must be byte-identical on every machine. `serde_json::to_vec`
+// is NOT canonical: it preserves whatever ordering the Map type gives, and
+// serde_json's Map is only a BTreeMap because nothing in our graph enables
+// the `preserve_order` feature. Any future dependency that does would flip it
+// to IndexMap through feature unification and silently change every commit id
+// with no compile error. So we sort explicitly rather than rely on that.
+//
+// Floats are refused outright rather than encoded lossily — a measured
+// quantity belongs in the record as a decimal string plus a unit, which
+// docs/05 already implies.
+// ---------------------------------------------------------------------------
+mod canon {
+    use serde_json::Value;
+
+    #[derive(Debug)]
+    pub struct NotCanonical(pub String);
+
+    /// Serialize `v` canonically: object keys sorted, no insignificant
+    /// whitespace, floats rejected.
+    pub fn to_vec(v: &Value) -> Result<Vec<u8>, NotCanonical> {
+        let mut out = Vec::new();
+        write(v, &mut out)?;
+        Ok(out)
+    }
+
+    fn write(v: &Value, out: &mut Vec<u8>) -> Result<(), NotCanonical> {
+        match v {
+            Value::Null => out.extend_from_slice(b"null"),
+            Value::Bool(true) => out.extend_from_slice(b"true"),
+            Value::Bool(false) => out.extend_from_slice(b"false"),
+            Value::Number(n) => {
+                // Integers only. A float here is a bug in the caller, not
+                // something to paper over with a rounded encoding.
+                if let Some(i) = n.as_i64() {
+                    out.extend_from_slice(i.to_string().as_bytes());
+                } else if let Some(u) = n.as_u64() {
+                    out.extend_from_slice(u.to_string().as_bytes());
+                } else {
+                    return Err(NotCanonical(format!(
+                        "float {n} cannot be canonicalised; store measured values \
+                         as a decimal string with a unit"
+                    )));
+                }
+            }
+            Value::String(s) => write_str(s, out),
+            Value::Array(a) => {
+                out.push(b'[');
+                for (i, item) in a.iter().enumerate() {
+                    if i > 0 {
+                        out.push(b',');
+                    }
+                    write(item, out)?;
+                }
+                out.push(b']');
+            }
+            Value::Object(m) => {
+                // Sort by key. serde_json's Map iteration order is an
+                // implementation detail we deliberately do not trust.
+                let mut keys: Vec<&String> = m.keys().collect();
+                keys.sort();
+                out.push(b'{');
+                for (i, k) in keys.iter().enumerate() {
+                    if i > 0 {
+                        out.push(b',');
+                    }
+                    write_str(k, out);
+                    out.push(b':');
+                    write(&m[*k], out)?;
+                }
+                out.push(b'}');
+            }
+        }
+        Ok(())
+    }
+
+    fn write_str(s: &str, out: &mut Vec<u8>) {
+        out.push(b'"');
+        for c in s.chars() {
+            match c {
+                '"' => out.extend_from_slice(b"\\\""),
+                '\\' => out.extend_from_slice(b"\\\\"),
+                '\n' => out.extend_from_slice(b"\\n"),
+                '\r' => out.extend_from_slice(b"\\r"),
+                '\t' => out.extend_from_slice(b"\\t"),
+                c if (c as u32) < 0x20 => {
+                    out.extend_from_slice(format!("\\u{:04x}", c as u32).as_bytes())
+                }
+                c => {
+                    let mut buf = [0u8; 4];
+                    out.extend_from_slice(c.encode_utf8(&mut buf).as_bytes());
+                }
+            }
+        }
+        out.push(b'"');
+    }
+}
+
+/// Domain separation: a commit signature must never verify as anything else.
+const COMMIT_DOMAIN: &[u8] = b"olb.commit.v1\0";
 
 /// Storage events carry a single `payload: tstr` holding JSON — unwrap the
 /// event array's first element, then parse it.
