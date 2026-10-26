@@ -5,13 +5,13 @@ import QtQuick.Layouts
 // S1 · Project board (docs/03, design/canvas/Main.dc.html).
 Item {
     id: board
-    property var data: ({})
+    property var boardData: ({})
     property bool fixtures: false
     signal openRecord(string recordId)
     signal openHistory(string ideaId)
 
-    readonly property var ideas: data.ideas || []
-    readonly property var stages: data.stagesUsed || []
+    readonly property var ideas: boardData.ideas || []
+    readonly property var stages: boardData.stagesUsed || []
     property string filter: "All"
 
     // Counts per stage: an idea counts at its CURRENT stage, and a published
@@ -70,7 +70,7 @@ Item {
                     spacing: Theme.s16
 
                     Text {
-                        text: board.data.title || ""
+                        text: board.boardData.title || ""
                         font.family: Theme.sans
                         font.pixelSize: Theme.pageTitle
                         font.weight: Theme.semibold
@@ -97,7 +97,7 @@ Item {
                     Layout.fillWidth: true
                     spacing: Theme.s8
                     Repeater {
-                        model: board.data.badges || []
+                        model: board.boardData.badges || []
                         delegate: Badge {
                             required property var modelData
                             text: modelData.text
@@ -123,13 +123,13 @@ Item {
 
                 StatusCard {
                     Layout.fillWidth: true
-                    label: (board.data.status && board.data.status.sync) ? board.data.status.sync.label : ""
-                    value: (board.data.status && board.data.status.sync) ? board.data.status.sync.value : ""
-                    sub:   (board.data.status && board.data.status.sync) ? board.data.status.sync.sub : ""
+                    label: (board.boardData.status && board.boardData.status.sync) ? board.boardData.status.sync.label : ""
+                    value: (board.boardData.status && board.boardData.status.sync) ? board.boardData.status.sync.value : ""
+                    sub:   (board.boardData.status && board.boardData.status.sync) ? board.boardData.status.sync.sub : ""
                 }
                 StatusCard {
                     Layout.fillWidth: true
-                    readonly property var c: (board.data.status && board.data.status.copies) ? board.data.status.copies : ({})
+                    readonly property var c: (board.boardData.status && board.boardData.status.copies) ? board.boardData.status.copies : ({})
                     label: c.label || ""
                     value: c.value || ""
                     warning: c.warning || ""
@@ -138,7 +138,7 @@ Item {
                 }
                 StatusCard {
                     Layout.fillWidth: true
-                    readonly property var h: (board.data.status && board.data.status.history) ? board.data.status.history : ({})
+                    readonly property var h: (board.boardData.status && board.boardData.status.history) ? board.boardData.status.history : ({})
                     label: h.label || ""
                     value: h.value || ""
                     sub: h.sub || ""
@@ -225,7 +225,7 @@ Item {
                 Layout.bottomMargin: Theme.s32
 
                 Repeater {
-                    model: board.data.activity || []
+                    model: board.boardData.activity || []
                     delegate: RowLayout {
                         required property var modelData
                         Layout.fillWidth: true

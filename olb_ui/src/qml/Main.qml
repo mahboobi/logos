@@ -123,7 +123,7 @@ Rectangle {
             currentIndex: root.screen === "Board" ? 0 : 1
 
             Board {
-                data: root.boardData
+                boardData: root.boardData
                 fixtures: root.fixtures
                 onOpenRecord: function (recordId) {
                     // S2 is not built yet; surface the intent rather than

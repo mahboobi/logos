@@ -138,11 +138,16 @@ Rectangle {
                 color: Theme.ink3
             }
 
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: card.commitStripClicked(card.idea.id || "")
-            }
+        }
+
+        // Click target for the commit strip. A MouseArea cannot use
+        // anchors.fill inside a layout-managed item, so it is a sibling
+        // sized by the layout instead.
+        MouseArea {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 1
+            cursorShape: Qt.PointingHandCursor
+            onClicked: card.commitStripClicked(card.idea.id || "")
         }
 
         RowLayout {
