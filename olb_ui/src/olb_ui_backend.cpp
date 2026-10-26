@@ -37,6 +37,13 @@ void OlbUiBackend::refreshBoard()
     setNotes(modules().olb_core.notes());
     setProjects(modules().olb_core.projects());
     setProfile(modules().olb_core.profile());
+    setHistory(modules().olb_core.history());
+    setMembers(modules().olb_core.members());
+}
+
+void OlbUiBackend::openRecord(QString recordId)
+{
+    setOpenedRecord(modules().olb_core.record(recordId));
 }
 
 void OlbUiBackend::createProject(QString specJson)

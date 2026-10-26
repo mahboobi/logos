@@ -26,17 +26,23 @@ Rectangle {
     readonly property var profileObj: parseJson(backend ? backend.profile : "{}", ({}))
     readonly property var boardProjects: root.boardData.projects || []
     readonly property var sessionObj: parseJson(backend ? backend.coreStatus : "{}", ({}))
+    readonly property var historyObj: parseJson(backend ? backend.history : "{}", ({}))
+    readonly property var membersObj: parseJson(backend ? backend.members : "{}", ({}))
+    readonly property var openedRecord: parseJson(backend ? backend.openedRecord : "{}", ({}))
+    readonly property var inviteDemoObj: ({})
+    property string historyFilterIdea: ""
 
     // docs/03 nav. `done` marks what actually exists today.
     readonly property var navItems: [
         { label: "Public Board",      done: true  },
         { label: "Personal Notebook", done: true  },
+        { label: "Notebook entry",    done: true  },
         { label: "New project",       done: true  },
+        { label: "History",           done: true  },
+        { label: "Members",           done: true  },
         { label: "Hypotheses",        done: false },
         { label: "Funding",           done: false },
         { label: "Publish",           done: false },
-        { label: "History",           done: false },
-        { label: "Members",           done: false },
         { label: "Settings",          done: true  },
         { label: "Diagnostics",       done: true  }
     ]
@@ -46,8 +52,19 @@ Rectangle {
         case "Personal Notebook": return 1;
         case "New project":       return 2;
         case "Settings":          return 3;
-        default:                  return 4;   // Diagnostics
+        case "Notebook entry":    return 4;
+        case "History":           return 5;
+        case "Members":           return 6;
+        default:                  return 7;   // Diagnostics
         }
+    }
+
+    // Opening a record loads it, then shows S2.
+    function showRecord(recordId) {
+        if (!root.backend || recordId === "")
+            return;
+        root.backend.openRecord(recordId);
+        root.screen = "Notebook entry";
     }
 
     Connections {
@@ -217,13 +234,10 @@ Rectangle {
             Board {
                 boardData: root.boardData
                 fixtures: root.fixtures
-                onOpenRecord: function (recordId) {
-                    // S2 is not built yet; surface the intent rather than
-                    // navigating nowhere.
-                    console.log("[olb_ui] open record:", recordId);
-                }
+                onOpenRecord: function (recordId) { root.showRecord(recordId); }
                 onOpenHistory: function (ideaId) {
-                    console.log("[olb_ui] open history for:", ideaId);
+                    root.historyFilterIdea = ideaId;
+                    root.screen = "History";
                 }
                 onNewProject: root.screen = "New project"
                 onNewEntry: root.screen = "Personal Notebook"
@@ -246,6 +260,40 @@ Rectangle {
                 backend: root.backend
                 profile: root.profileObj
                 coreStatus: root.backend ? root.backend.coreStatus : ""
+            }
+
+            Entry {
+                backend: root.backend
+                record: root.openedRecord
+                onOpenHistory: function (recordId) {
+                    root.historyFilterIdea = recordId;
+                    root.screen = "History";
+                }
+                onOpenFile: function (cid) { console.log("[olb_ui] open file:", cid); }
+            }
+
+            History {
+                backend: root.backend
+                history: root.historyObj
+                filterIdeaId: root.historyFilterIdea
+                onOpenCommit: function (commitId) { console.log("[olb_ui] open commit:", commitId); }
+                onOpenRecord: function (recordId) { root.showRecord(recordId); }
+            }
+
+            Members {
+                backend: root.backend
+                members: root.membersObj
+                inviteDemo: root.inviteDemoObj
+                onInviteRequested: function (olbId, role) {
+                    // TODO(phase1c): identity.invite(olbId, role) — docs/11
+                    console.log("[olb_ui] invite requested:", olbId, role);
+                }
+                onMemberRemoved: function (memberId) {
+                    console.log("[olb_ui] member removed:", memberId);
+                }
+                onKeyRotationRequested: {
+                    console.log("[olb_ui] key rotation requested");
+                }
             }
 
             Diagnostics {

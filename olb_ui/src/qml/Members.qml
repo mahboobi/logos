@@ -370,6 +370,7 @@ Item {
 
                 // ---- Panel: What each role can do ----
                 Panel {
+                    id: roleMatrix
                     title: "What each role can do"
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignTop
@@ -407,7 +408,7 @@ Item {
                     Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.line }
 
                     Repeater {
-                        model: parent.parent.rows
+                        model: roleMatrix.rows
                         delegate: ColumnLayout {
                             required property var modelData
                             required property int index
@@ -999,337 +1000,515 @@ Item {
             inviteButton.forceActiveFocus();     // focus returns to "Invite member"
         }
 
-        contentItem: ColumnLayout {
-            spacing: 0
+        // The modal body and the discard confirmation share one Item so the
+        // confirmation can cover the body without the layout managing it.
+        contentItem: Item {
 
-            Shortcut {
-                sequence: "Esc"
-                enabled: inviteModal.opened
-                onActivated: inviteModal.confirmDiscard ? (inviteModal.confirmDiscard = false)
-                                                        : inviteModal.requestClose()
-            }
-
-            // ---- header ----
             ColumnLayout {
-                Layout.fillWidth: true
-                Layout.margins: Theme.s20
-                spacing: Theme.s12
+                anchors.fill: parent
+                spacing: 0
 
-                RowLayout {
+                Shortcut {
+                    sequence: "Esc"
+                    enabled: inviteModal.opened
+                    onActivated: inviteModal.confirmDiscard ? (inviteModal.confirmDiscard = false)
+                                                            : inviteModal.requestClose()
+                }
+
+                // ---- header ----
+                ColumnLayout {
                     Layout.fillWidth: true
+                    Layout.margins: Theme.s20
                     spacing: Theme.s12
 
-                    ColumnLayout {
+                    RowLayout {
                         Layout.fillWidth: true
-                        spacing: Theme.s2
-                        Text {
-                            text: screen.projectName
-                            textFormat: Text.PlainText
-                            font.family: Theme.sans
-                            font.pixelSize: Theme.overline
-                            font.weight: Theme.medium
-                            font.letterSpacing: Theme.overlineSpacing
-                            color: Theme.ink3
-                            elide: Text.ElideRight
-                            Layout.fillWidth: true
-                        }
-                        Text {
-                            text: "Invite a member"
-                            font.family: Theme.sans
-                            font.pixelSize: Theme.modalTitle
-                            font.weight: Theme.semibold
-                            color: Theme.ink
-                        }
-                    }
-                    Button {
-                        text: "Close"
-                        implicitHeight: Theme.touchTarget
-                        Accessible.name: "Close the invite dialog"
-                        onClicked: inviteModal.requestClose()
-                    }
-                }
-
-                // ---- three-step bar ----
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Theme.s8
-
-                    Repeater {
-                        model: inviteModal.stepLabels
-                        delegate: ColumnLayout {
-                            required property string modelData
-                            required property int index
-                            readonly property int n: index + 1
-                            readonly property bool done: n < inviteModal.step
-                            readonly property bool current: n === inviteModal.step
-                            Layout.fillWidth: true
-                            spacing: Theme.s6
-
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: Theme.stepBar
-                                radius: Theme.rProgress
-                                color: done ? Theme.accent : (current ? Theme.violet : Theme.line)
-                            }
-                            Text {
-                                text: modelData
-                                font.family: Theme.sans
-                                font.pixelSize: Theme.meta
-                                font.weight: current ? Theme.semibold : Theme.medium
-                                color: current ? Theme.ink : (done ? Theme.accent : Theme.ink3)
-                                elide: Text.ElideRight
-                                Layout.fillWidth: true
-                                Accessible.role: Accessible.StaticText
-                                Accessible.name: "Step " + n + ", " + modelData
-                                             + (done ? ", done" : (current ? ", current" : ", not started"))
-                            }
-                        }
-                    }
-                }
-            }
-
-            Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.line }
-
-            // ---- body ----
-            ScrollView {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                contentWidth: availableWidth
-                clip: true
-
-                ColumnLayout {
-                    width: inviteModal.width
-                    spacing: Theme.s16
-
-                    // =============================================== STEP 1
-                    ColumnLayout {
-                        visible: inviteModal.step === 1
-                        Layout.fillWidth: true
-                        Layout.margins: Theme.s20
                         spacing: Theme.s12
 
-                        FieldLabel { text: "How do you want to invite them?" }
-
-                        ChoiceCard {
-                            Layout.fillWidth: true
-                            radio: true
-                            checked: !inviteModal.isCode
-                            title: "Paste their Open Labbook ID"
-                            body: "For someone who already uses Open Labbook. You check their key "
-                                  + "fingerprint, then send."
-                            onToggled: inviteModal.method = "id"
-                        }
-                        ChoiceCard {
-                            Layout.fillWidth: true
-                            radio: true
-                            checked: inviteModal.isCode
-                            title: "Share a one-time invite code"
-                            body: "For someone new. They paste the code, their node replies with its "
-                                  + "key, you approve."
-                            onToggled: inviteModal.method = "code"
-                        }
-
-                        // ---------------- by Open Labbook ID ----------------
                         ColumnLayout {
-                            visible: !inviteModal.isCode
                             Layout.fillWidth: true
-                            spacing: Theme.s8
-
-                            FieldLabel { text: "Their Open Labbook ID" }
-                            TextField {
-                                id: idField
+                            spacing: Theme.s2
+                            Text {
+                                text: screen.projectName
+                                textFormat: Text.PlainText
+                                font.family: Theme.sans
+                                font.pixelSize: Theme.overline
+                                font.weight: Theme.medium
+                                font.letterSpacing: Theme.overlineSpacing
+                                color: Theme.ink3
+                                elide: Text.ElideRight
                                 Layout.fillWidth: true
-                                implicitHeight: Theme.touchTarget
-                                placeholderText: screen.inviteDemo.olbId || "olb1:…"
-                                font.family: Theme.mono
-                                font.pixelSize: Theme.body
-                                color: Theme.violet
-                                Accessible.name: "Their Open Labbook ID"
                             }
                             Text {
-                                text: "They copy it from Open Labbook, Profile, Copy my ID. It carries "
-                                      + "their long-term sealing key, so it keeps working after they "
-                                      + "restart Basecamp."
+                                text: "Invite a member"
+                                font.family: Theme.sans
+                                font.pixelSize: Theme.modalTitle
+                                font.weight: Theme.semibold
+                                color: Theme.ink
+                            }
+                        }
+                        Button {
+                            text: "Close"
+                            implicitHeight: Theme.touchTarget
+                            Accessible.name: "Close the invite dialog"
+                            onClicked: inviteModal.requestClose()
+                        }
+                    }
+
+                    // ---- three-step bar ----
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Theme.s8
+
+                        Repeater {
+                            model: inviteModal.stepLabels
+                            delegate: ColumnLayout {
+                                required property string modelData
+                                required property int index
+                                readonly property int n: index + 1
+                                readonly property bool done: n < inviteModal.step
+                                readonly property bool current: n === inviteModal.step
+                                Layout.fillWidth: true
+                                spacing: Theme.s6
+
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: Theme.stepBar
+                                    radius: Theme.rProgress
+                                    color: done ? Theme.accent : (current ? Theme.violet : Theme.line)
+                                }
+                                Text {
+                                    text: modelData
+                                    font.family: Theme.sans
+                                    font.pixelSize: Theme.meta
+                                    font.weight: current ? Theme.semibold : Theme.medium
+                                    color: current ? Theme.ink : (done ? Theme.accent : Theme.ink3)
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                    Accessible.role: Accessible.StaticText
+                                    Accessible.name: "Step " + n + ", " + modelData
+                                                 + (done ? ", done" : (current ? ", current" : ", not started"))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.line }
+
+                // ---- body ----
+                ScrollView {
+                    id: modalBody
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    contentWidth: availableWidth
+                    clip: true
+
+                    ColumnLayout {
+                        width: modalBody.availableWidth
+                        spacing: Theme.s16
+
+                        // =============================================== STEP 1
+                        ColumnLayout {
+                            visible: inviteModal.step === 1
+                            Layout.fillWidth: true
+                            Layout.margins: Theme.s20
+                            spacing: Theme.s12
+
+                            FieldLabel { text: "How do you want to invite them?" }
+
+                            ChoiceCard {
+                                Layout.fillWidth: true
+                                radio: true
+                                checked: !inviteModal.isCode
+                                title: "Paste their Open Labbook ID"
+                                body: "For someone who already uses Open Labbook. You check their key "
+                                      + "fingerprint, then send."
+                                onToggled: inviteModal.method = "id"
+                            }
+                            ChoiceCard {
+                                Layout.fillWidth: true
+                                radio: true
+                                checked: inviteModal.isCode
+                                title: "Share a one-time invite code"
+                                body: "For someone new. They paste the code, their node replies with its "
+                                      + "key, you approve."
+                                onToggled: inviteModal.method = "code"
+                            }
+
+                            // ---------------- by Open Labbook ID ----------------
+                            ColumnLayout {
+                                visible: !inviteModal.isCode
+                                Layout.fillWidth: true
+                                spacing: Theme.s8
+
+                                FieldLabel { text: "Their Open Labbook ID" }
+                                TextField {
+                                    id: idField
+                                    Layout.fillWidth: true
+                                    implicitHeight: Theme.touchTarget
+                                    placeholderText: screen.inviteDemo.olbId || "olb1:…"
+                                    font.family: Theme.mono
+                                    font.pixelSize: Theme.body
+                                    color: Theme.violet
+                                    Accessible.name: "Their Open Labbook ID"
+                                }
+                                Text {
+                                    text: "They copy it from Open Labbook, Profile, Copy my ID. It carries "
+                                          + "their long-term sealing key, so it keeps working after they "
+                                          + "restart Basecamp."
+                                    font.family: Theme.sans; font.pixelSize: Theme.meta
+                                    color: Theme.ink3
+                                    wrapMode: Text.Wrap
+                                    Layout.fillWidth: true
+                                }
+                                Text {
+                                    visible: idField.text.trim().length > 0 && !inviteModal.idValid
+                                    text: "This is not an Open Labbook ID. Ask them to copy it again."
+                                    font.family: Theme.sans; font.pixelSize: Theme.meta
+                                    font.weight: Theme.medium
+                                    color: Theme.amber
+                                    wrapMode: Text.Wrap
+                                    Layout.fillWidth: true
+                                }
+
+                                // ---- preview of the parsed ID ----
+                                Rectangle {
+                                    visible: inviteModal.idValid
+                                    Layout.fillWidth: true
+                                    radius: Theme.rInner
+                                    color: Theme.surfaceSunken
+                                    border.width: 1
+                                    border.color: Theme.line
+                                    implicitHeight: previewCol.implicitHeight + Theme.s16 * 2
+
+                                    ColumnLayout {
+                                        id: previewCol
+                                        anchors.fill: parent
+                                        anchors.margins: Theme.s16
+                                        spacing: Theme.s8
+
+                                        Text {
+                                            text: inviteModal.parsed.name || ""
+                                            textFormat: Text.PlainText
+                                            font.family: Theme.sans; font.pixelSize: Theme.body
+                                            font.weight: Theme.semibold
+                                            color: Theme.ink
+                                            wrapMode: Text.Wrap
+                                            Layout.fillWidth: true
+                                        }
+                                        Text {
+                                            text: "Name and ORCID as they set them · not verified by Open Labbook"
+                                            font.family: Theme.sans; font.pixelSize: Theme.meta
+                                            color: Theme.amber
+                                            wrapMode: Text.Wrap
+                                            Layout.fillWidth: true
+                                        }
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            spacing: Theme.s6
+                                            Rectangle {
+                                                width: Theme.statusDot; height: Theme.statusDot
+                                                radius: Theme.statusDot / 2
+                                                color: inviteModal.parsed.online ? Theme.accent : Theme.dashed
+                                            }
+                                            Text {
+                                                text: inviteModal.parsed.online
+                                                      ? "Online now"
+                                                      : "Offline · will deliver when they return"
+                                                font.family: Theme.sans; font.pixelSize: Theme.small
+                                                color: inviteModal.parsed.online ? Theme.accent : Theme.ink3
+                                                wrapMode: Text.Wrap
+                                                Layout.fillWidth: true
+                                            }
+                                        }
+
+                                        FieldLabel { text: "Key fingerprint" }
+                                        Rectangle {
+                                            Layout.fillWidth: true
+                                            radius: Theme.rControl
+                                            color: Theme.surface
+                                            border.width: 1
+                                            border.color: Theme.line
+                                            implicitHeight: fpText.implicitHeight + Theme.s12 * 2
+                                            Text {
+                                                id: fpText
+                                                anchors.left: parent.left
+                                                anchors.right: parent.right
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                anchors.margins: Theme.s12
+                                                text: inviteModal.parsed.fingerprint || ""
+                                                font.family: Theme.mono
+                                                font.pixelSize: Theme.fingerprint
+                                                color: Theme.violet
+                                                wrapMode: Text.Wrap
+                                                Accessible.role: Accessible.StaticText
+                                                Accessible.name: "Key fingerprint " + (inviteModal.parsed.fingerprint || "")
+                                            }
+                                        }
+
+                                        CheckBox {
+                                            id: fpCheck
+                                            Layout.fillWidth: true
+                                            implicitHeight: Theme.touchTarget
+                                            checked: inviteModal.fingerprintChecked
+                                            text: "I compared this fingerprint with "
+                                                  + screen.firstName(inviteModal.parsed.name)
+                                                  + " in person or on a call"
+                                            font.family: Theme.sans
+                                            font.pixelSize: Theme.small
+                                            Accessible.name: text
+                                            onToggled: inviteModal.fingerprintChecked = checked
+                                        }
+                                    }
+                                }
+                            }
+
+                            // ---------------- by one-time code ----------------
+                            ColumnLayout {
+                                visible: inviteModal.isCode
+                                Layout.fillWidth: true
+                                spacing: Theme.s12
+
+                                FieldLabel { text: "One-time invite code" }
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    radius: Theme.rInner
+                                    color: Theme.surfaceSunken
+                                    border.width: 1
+                                    border.color: Theme.line
+                                    implicitHeight: codeText.implicitHeight + Theme.s16 * 2
+                                    Text {
+                                        id: codeText
+                                        anchors.centerIn: parent
+                                        text: inviteModal.code
+                                        font.family: Theme.mono
+                                        font.pixelSize: Theme.code
+                                        font.weight: Theme.medium
+                                        color: Theme.violet
+                                        Accessible.role: Accessible.StaticText
+                                        Accessible.name: "One-time invite code " + inviteModal.code
+                                    }
+                                }
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: Theme.s8
+                                    Button {
+                                        text: "Copy code"
+                                        implicitHeight: Theme.touchTarget
+                                        Accessible.name: "Copy code"
+                                        onClicked: screen.copyToClipboard(inviteModal.code)
+                                    }
+                                    Button {
+                                        text: "Make a new code"
+                                        implicitHeight: Theme.touchTarget
+                                        Accessible.name: "Make a new code"
+                                        // TODO(phase1c): invites.newCode(expiry, uses) — generating a code
+                                        // client-side would be a lie, the code hash has to be registered
+                                        // in core before any node can redeem it (docs/04 §5).
+                                        onClicked: {}
+                                    }
+                                    Item { Layout.fillWidth: true }
+                                }
+
+                                FieldLabel { text: "Expires after" }
+                                PillRow {
+                                    Layout.fillWidth: true
+                                    groupName: "Expires after"
+                                    entries: ["24 hours", "48 hours", "7 days"]
+                                    selected: inviteModal.expiry
+                                    onPicked: function (label) { inviteModal.expiry = label; }
+                                }
+
+                                FieldLabel { text: "Can be used" }
+                                PillRow {
+                                    Layout.fillWidth: true
+                                    groupName: "Can be used"
+                                    entries: ["Once", "Up to 5 times"]
+                                    selected: inviteModal.uses
+                                    onPicked: function (label) { inviteModal.uses = label; }
+                                }
+
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: Theme.s6
+                                    Repeater {
+                                        model: ["Send the code through any channel you trust.",
+                                                "They open Open Labbook, Join a project, and paste it.",
+                                                "Their node sends back its key. The request appears in "
+                                                + "Members for you to approve."]
+                                        delegate: RowLayout {
+                                            required property string modelData
+                                            required property int index
+                                            Layout.fillWidth: true
+                                            spacing: Theme.s8
+                                            Text {
+                                                text: (index + 1) + "."
+                                                font.family: Theme.mono; font.pixelSize: Theme.small
+                                                color: Theme.ink3
+                                                Layout.alignment: Qt.AlignTop
+                                            }
+                                            Text {
+                                                text: modelData
+                                                font.family: Theme.sans; font.pixelSize: Theme.small
+                                                color: Theme.ink2
+                                                wrapMode: Text.Wrap
+                                                Layout.fillWidth: true
+                                            }
+                                        }
+                                    }
+                                }
+                                Text {
+                                    text: "The code holds no project data. It only lets their node find yours."
+                                    font.family: Theme.sans; font.pixelSize: Theme.meta
+                                    color: Theme.ink3
+                                    wrapMode: Text.Wrap
+                                    Layout.fillWidth: true
+                                }
+                            }
+                        }
+
+                        // =============================================== STEP 2
+                        ColumnLayout {
+                            visible: inviteModal.step === 2
+                            Layout.fillWidth: true
+                            Layout.margins: Theme.s20
+                            spacing: Theme.s12
+
+                            FieldLabel { text: "Role" }
+                            Repeater {
+                                model: [
+                                    { label: "Contributor",
+                                      desc: "Writes entries, opens branches and approves merges into main." },
+                                    { label: "Reviewer",
+                                      desc: "Reads the ideas you choose and approves funding milestones. Cannot edit records." },
+                                    { label: "Lead",
+                                      desc: "Everything a contributor can do, plus publishing and inviting others." }
+                                ]
+                                delegate: ChoiceCard {
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    radio: true
+                                    checked: inviteModal.role === modelData.label
+                                    title: modelData.label
+                                    body: modelData.desc
+                                    onToggled: inviteModal.role = modelData.label
+                                }
+                            }
+
+                            FieldLabel { text: "Which ideas can they see?" }
+                            PillRow {
+                                Layout.fillWidth: true
+                                groupName: "Which ideas can they see?"
+                                entries: ["All ideas", "Selected ideas"]
+                                selected: inviteModal.access
+                                onPicked: function (label) { inviteModal.access = label; }
+                            }
+
+                            ColumnLayout {
+                                visible: inviteModal.access === "Selected ideas"
+                                Layout.fillWidth: true
+                                spacing: Theme.s2
+                                Repeater {
+                                    model: screen.accessIdeas
+                                    delegate: Rectangle {
+                                        required property var modelData
+                                        readonly property string ideaId: modelData.id || modelData.title || ""
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: Theme.touchTarget
+                                        color: "transparent"
+                                        CheckBox {
+                                            anchors.left: parent.left
+                                            anchors.right: parent.right
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            checked: !!inviteModal.pickedIdeas[parent.ideaId]
+                                            text: modelData.title || modelData.id || ""
+                                            font.family: Theme.sans
+                                            font.pixelSize: Theme.small
+                                            Accessible.name: text
+                                            onToggled: {
+                                                var next = {};
+                                                for (var k in inviteModal.pickedIdeas)
+                                                    next[k] = inviteModal.pickedIdeas[k];
+                                                next[parent.ideaId] = checked;
+                                                inviteModal.pickedIdeas = next;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Text {
+                                text: "Each idea's records are sealed separately, so access can be widened later."
                                 font.family: Theme.sans; font.pixelSize: Theme.meta
                                 color: Theme.ink3
                                 wrapMode: Text.Wrap
                                 Layout.fillWidth: true
                             }
+
+                            FieldLabel { text: "Note to them (optional)" }
+                            TextArea {
+                                id: noteField
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 88
+                                font.family: Theme.sans
+                                font.pixelSize: Theme.body
+                                Accessible.name: "Note to them, optional"
+                            }
                             Text {
-                                visible: idField.text.trim().length > 0 && !inviteModal.idValid
-                                text: "This is not an Open Labbook ID. Ask them to copy it again."
+                                text: "Sent end-to-end encrypted with the invite."
                                 font.family: Theme.sans; font.pixelSize: Theme.meta
-                                font.weight: Theme.medium
-                                color: Theme.amber
-                                wrapMode: Text.Wrap
+                                color: Theme.ink3
                                 Layout.fillWidth: true
                             }
+                        }
 
-                            // ---- preview of the parsed ID ----
-                            Rectangle {
-                                visible: inviteModal.idValid
+                        // =============================================== STEP 3
+                        ColumnLayout {
+                            visible: inviteModal.step === 3
+                            Layout.fillWidth: true
+                            Layout.margins: Theme.s20
+                            spacing: Theme.s16
+
+                            ColumnLayout {
                                 Layout.fillWidth: true
-                                radius: Theme.rInner
-                                color: Theme.surfaceSunken
-                                border.width: 1
-                                border.color: Theme.line
-                                implicitHeight: previewCol.implicitHeight + Theme.s16 * 2
-
-                                ColumnLayout {
-                                    id: previewCol
-                                    anchors.fill: parent
-                                    anchors.margins: Theme.s16
-                                    spacing: Theme.s8
-
-                                    Text {
-                                        text: inviteModal.parsed.name || ""
-                                        textFormat: Text.PlainText
-                                        font.family: Theme.sans; font.pixelSize: Theme.body
-                                        font.weight: Theme.semibold
-                                        color: Theme.ink
-                                        wrapMode: Text.Wrap
+                                spacing: Theme.s8
+                                Repeater {
+                                    model: inviteModal.summaryRows
+                                    delegate: RowLayout {
+                                        required property var modelData
+                                        readonly property bool isKey: modelData.k === "Key fingerprint"
+                                                                      || String(modelData.v).indexOf("Code ") === 0
                                         Layout.fillWidth: true
-                                    }
-                                    Text {
-                                        text: "Name and ORCID as they set them · not verified by Open Labbook"
-                                        font.family: Theme.sans; font.pixelSize: Theme.meta
-                                        color: Theme.amber
-                                        wrapMode: Text.Wrap
-                                        Layout.fillWidth: true
-                                    }
-                                    RowLayout {
-                                        Layout.fillWidth: true
-                                        spacing: Theme.s6
-                                        Rectangle {
-                                            width: Theme.statusDot; height: Theme.statusDot
-                                            radius: Theme.statusDot / 2
-                                            color: inviteModal.parsed.online ? Theme.accent : Theme.dashed
+                                        spacing: Theme.s12
+                                        Text {
+                                            text: modelData.k
+                                            Layout.preferredWidth: 140
+                                            font.family: Theme.sans; font.pixelSize: Theme.small
+                                            color: Theme.ink3
                                         }
                                         Text {
-                                            text: inviteModal.parsed.online
-                                                  ? "Online now"
-                                                  : "Offline · will deliver when they return"
-                                            font.family: Theme.sans; font.pixelSize: Theme.small
-                                            color: inviteModal.parsed.online ? Theme.accent : Theme.ink3
+                                            text: modelData.v
+                                            textFormat: Text.PlainText
+                                            font.family: isKey ? Theme.mono : Theme.sans
+                                            font.pixelSize: Theme.small
+                                            font.weight: Theme.medium
+                                            color: isKey ? Theme.violet : Theme.ink
                                             wrapMode: Text.Wrap
                                             Layout.fillWidth: true
                                         }
                                     }
-
-                                    FieldLabel { text: "Key fingerprint" }
-                                    Rectangle {
-                                        Layout.fillWidth: true
-                                        radius: Theme.rControl
-                                        color: Theme.surface
-                                        border.width: 1
-                                        border.color: Theme.line
-                                        implicitHeight: fpText.implicitHeight + Theme.s12 * 2
-                                        Text {
-                                            id: fpText
-                                            anchors.left: parent.left
-                                            anchors.right: parent.right
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            anchors.margins: Theme.s12
-                                            text: inviteModal.parsed.fingerprint || ""
-                                            font.family: Theme.mono
-                                            font.pixelSize: Theme.fingerprint
-                                            color: Theme.violet
-                                            wrapMode: Text.Wrap
-                                            Accessible.role: Accessible.StaticText
-                                            Accessible.name: "Key fingerprint " + (inviteModal.parsed.fingerprint || "")
-                                        }
-                                    }
-
-                                    CheckBox {
-                                        id: fpCheck
-                                        Layout.fillWidth: true
-                                        implicitHeight: Theme.touchTarget
-                                        checked: inviteModal.fingerprintChecked
-                                        text: "I compared this fingerprint with "
-                                              + screen.firstName(inviteModal.parsed.name)
-                                              + " in person or on a call"
-                                        font.family: Theme.sans
-                                        font.pixelSize: Theme.small
-                                        Accessible.name: text
-                                        onToggled: inviteModal.fingerprintChecked = checked
-                                    }
                                 }
                             }
-                        }
 
-                        // ---------------- by one-time code ----------------
-                        ColumnLayout {
-                            visible: inviteModal.isCode
-                            Layout.fillWidth: true
-                            spacing: Theme.s12
+                            Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.lineSoft }
 
-                            FieldLabel { text: "One-time invite code" }
-                            Rectangle {
-                                Layout.fillWidth: true
-                                radius: Theme.rInner
-                                color: Theme.surfaceSunken
-                                border.width: 1
-                                border.color: Theme.line
-                                implicitHeight: codeText.implicitHeight + Theme.s16 * 2
-                                Text {
-                                    id: codeText
-                                    anchors.centerIn: parent
-                                    text: inviteModal.code
-                                    font.family: Theme.mono
-                                    font.pixelSize: Theme.code
-                                    font.weight: Theme.medium
-                                    color: Theme.violet
-                                    Accessible.role: Accessible.StaticText
-                                    Accessible.name: "One-time invite code " + inviteModal.code
-                                }
-                            }
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: Theme.s8
-                                Button {
-                                    text: "Copy code"
-                                    implicitHeight: Theme.touchTarget
-                                    Accessible.name: "Copy code"
-                                    onClicked: screen.copyToClipboard(inviteModal.code)
-                                }
-                                Button {
-                                    text: "Make a new code"
-                                    implicitHeight: Theme.touchTarget
-                                    Accessible.name: "Make a new code"
-                                    // TODO(phase1c): invites.newCode(expiry, uses) — generating a code
-                                    // client-side would be a lie, the code hash has to be registered
-                                    // in core before any node can redeem it (docs/04 §5).
-                                    onClicked: {}
-                                }
-                                Item { Layout.fillWidth: true }
-                            }
-
-                            FieldLabel { text: "Expires after" }
-                            PillRow {
-                                Layout.fillWidth: true
-                                groupName: "Expires after"
-                                entries: ["24 hours", "48 hours", "7 days"]
-                                selected: inviteModal.expiry
-                                onPicked: function (label) { inviteModal.expiry = label; }
-                            }
-
-                            FieldLabel { text: "Can be used" }
-                            PillRow {
-                                Layout.fillWidth: true
-                                groupName: "Can be used"
-                                entries: ["Once", "Up to 5 times"]
-                                selected: inviteModal.uses
-                                onPicked: function (label) { inviteModal.uses = label; }
-                            }
-
+                            FieldLabel { text: "What happens when you send" }
                             ColumnLayout {
                                 Layout.fillWidth: true
                                 spacing: Theme.s6
                                 Repeater {
-                                    model: ["Send the code through any channel you trust.",
-                                            "They open Open Labbook, Join a project, and paste it.",
-                                            "Their node sends back its key. The request appears in "
-                                            + "Members for you to approve."]
+                                    model: inviteModal.happensRows
                                     delegate: RowLayout {
                                         required property string modelData
                                         required property int index
@@ -1343,6 +1522,7 @@ Item {
                                         }
                                         Text {
                                             text: modelData
+                                            textFormat: Text.PlainText
                                             font.family: Theme.sans; font.pixelSize: Theme.small
                                             color: Theme.ink2
                                             wrapMode: Text.Wrap
@@ -1351,386 +1531,213 @@ Item {
                                     }
                                 }
                             }
-                            Text {
-                                text: "The code holds no project data. It only lets their node find yours."
-                                font.family: Theme.sans; font.pixelSize: Theme.meta
-                                color: Theme.ink3
-                                wrapMode: Text.Wrap
-                                Layout.fillWidth: true
-                            }
-                        }
-                    }
 
-                    // =============================================== STEP 2
-                    ColumnLayout {
-                        visible: inviteModal.step === 2
-                        Layout.fillWidth: true
-                        Layout.margins: Theme.s20
-                        spacing: Theme.s12
-
-                        FieldLabel { text: "Role" }
-                        Repeater {
-                            model: [
-                                { label: "Contributor",
-                                  desc: "Writes entries, opens branches and approves merges into main." },
-                                { label: "Reviewer",
-                                  desc: "Reads the ideas you choose and approves funding milestones. Cannot edit records." },
-                                { label: "Lead",
-                                  desc: "Everything a contributor can do, plus publishing and inviting others." }
-                            ]
-                            delegate: ChoiceCard {
-                                required property var modelData
+                            // Amber testnet notice. docs/03 M1 step 3 replaces the design's
+                            // Chat-address wording: a Chat address is never an identity, and the
+                            // envelope travels over a Delivery inbox topic (docs/04 §3).
+                            Rectangle {
+                                visible: !inviteModal.isCode || inviteModal.reviewMode
                                 Layout.fillWidth: true
-                                radio: true
-                                checked: inviteModal.role === modelData.label
-                                title: modelData.label
-                                body: modelData.desc
-                                onToggled: inviteModal.role = modelData.label
+                                radius: Theme.rInner
+                                color: Theme.amberTint
+                                implicitHeight: noticeText.implicitHeight + Theme.s12 * 2
+                                Text {
+                                    id: noticeText
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    anchors.margins: Theme.s12
+                                    text: "Testnet: if they are offline for long, the network may drop the "
+                                          + "message. Resend from Members, Pending invites — nothing else "
+                                          + "needs redoing."
+                                    font.family: Theme.sans; font.pixelSize: Theme.meta
+                                    color: Theme.amber
+                                    wrapMode: Text.Wrap
+                                }
                             }
                         }
 
-                        FieldLabel { text: "Which ideas can they see?" }
-                        PillRow {
-                            Layout.fillWidth: true
-                            groupName: "Which ideas can they see?"
-                            entries: ["All ideas", "Selected ideas"]
-                            selected: inviteModal.access
-                            onPicked: function (label) { inviteModal.access = label; }
-                        }
-
+                        // =============================================== STEP 4
                         ColumnLayout {
-                            visible: inviteModal.access === "Selected ideas"
+                            visible: inviteModal.step === 4
                             Layout.fillWidth: true
-                            spacing: Theme.s2
-                            Repeater {
-                                model: screen.accessIdeas
-                                delegate: Rectangle {
-                                    required property var modelData
-                                    readonly property string ideaId: modelData.id || modelData.title || ""
+                            Layout.margins: Theme.s20
+                            spacing: Theme.s16
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: Theme.s4
+                                Text {
+                                    text: inviteModal.doneTitle
+                                    textFormat: Text.PlainText
+                                    font.family: Theme.sans
+                                    font.pixelSize: Theme.cardTitle
+                                    font.weight: Theme.semibold
+                                    color: Theme.ink
+                                    wrapMode: Text.Wrap
                                     Layout.fillWidth: true
-                                    Layout.preferredHeight: Theme.touchTarget
-                                    color: "transparent"
-                                    CheckBox {
-                                        anchors.left: parent.left
-                                        anchors.right: parent.right
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        checked: !!inviteModal.pickedIdeas[parent.ideaId]
-                                        text: modelData.title || modelData.id || ""
-                                        font.family: Theme.sans
-                                        font.pixelSize: Theme.small
-                                        Accessible.name: text
-                                        onToggled: {
-                                            var next = {};
-                                            for (var k in inviteModal.pickedIdeas)
-                                                next[k] = inviteModal.pickedIdeas[k];
-                                            next[parent.ideaId] = checked;
-                                            inviteModal.pickedIdeas = next;
+                                }
+                                Text {
+                                    text: inviteModal.doneSub
+                                    textFormat: Text.PlainText
+                                    font.family: Theme.sans
+                                    font.pixelSize: Theme.small
+                                    color: Theme.ink3
+                                    wrapMode: Text.Wrap
+                                    Layout.fillWidth: true
+                                }
+                            }
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: Theme.s12
+                                Repeater {
+                                    model: inviteModal.progressRows
+                                    delegate: RowLayout {
+                                        required property var modelData
+                                        readonly property bool done: modelData.s === "done"
+                                        readonly property bool now: modelData.s === "now"
+                                        Layout.fillWidth: true
+                                        spacing: Theme.s12
+
+                                        Rectangle {
+                                            Layout.alignment: Qt.AlignVCenter
+                                            width: 14; height: 14; radius: 7
+                                            color: done ? Theme.accent : Theme.surface
+                                            border.width: 2
+                                            border.color: done ? Theme.accent
+                                                               : (now ? Theme.violet : Theme.inputBorder)
+                                        }
+                                        Text {
+                                            text: modelData.l
+                                            textFormat: Text.PlainText
+                                            font.family: Theme.sans; font.pixelSize: Theme.small
+                                            color: (done || now) ? Theme.ink : Theme.ink3
+                                            wrapMode: Text.Wrap
+                                            Layout.fillWidth: true
+                                        }
+                                        Text {
+                                            text: done ? "Done" : (now ? "Waiting" : "Not yet")
+                                            font.family: Theme.sans; font.pixelSize: Theme.meta
+                                            font.weight: Theme.medium
+                                            color: done ? Theme.accent : (now ? Theme.violet : Theme.ink3)
                                         }
                                     }
                                 }
                             }
-                        }
 
-                        Text {
-                            text: "Each idea's records are sealed separately, so access can be widened later."
-                            font.family: Theme.sans; font.pixelSize: Theme.meta
-                            color: Theme.ink3
-                            wrapMode: Text.Wrap
-                            Layout.fillWidth: true
-                        }
-
-                        FieldLabel { text: "Note to them (optional)" }
-                        TextArea {
-                            id: noteField
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 88
-                            font.family: Theme.sans
-                            font.pixelSize: Theme.body
-                            Accessible.name: "Note to them, optional"
-                        }
-                        Text {
-                            text: "Sent end-to-end encrypted with the invite."
-                            font.family: Theme.sans; font.pixelSize: Theme.meta
-                            color: Theme.ink3
-                            Layout.fillWidth: true
-                        }
-                    }
-
-                    // =============================================== STEP 3
-                    ColumnLayout {
-                        visible: inviteModal.step === 3
-                        Layout.fillWidth: true
-                        Layout.margins: Theme.s20
-                        spacing: Theme.s16
-
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: Theme.s8
-                            Repeater {
-                                model: inviteModal.summaryRows
-                                delegate: RowLayout {
-                                    required property var modelData
-                                    readonly property bool isKey: modelData.k === "Key fingerprint"
-                                                                  || String(modelData.v).indexOf("Code ") === 0
-                                    Layout.fillWidth: true
-                                    spacing: Theme.s12
-                                    Text {
-                                        text: modelData.k
-                                        Layout.preferredWidth: 140
-                                        font.family: Theme.sans; font.pixelSize: Theme.small
-                                        color: Theme.ink3
-                                    }
-                                    Text {
-                                        text: modelData.v
-                                        textFormat: Text.PlainText
-                                        font.family: isKey ? Theme.mono : Theme.sans
-                                        font.pixelSize: Theme.small
-                                        font.weight: Theme.medium
-                                        color: isKey ? Theme.violet : Theme.ink
-                                        wrapMode: Text.Wrap
-                                        Layout.fillWidth: true
-                                    }
-                                }
-                            }
-                        }
-
-                        Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.lineSoft }
-
-                        FieldLabel { text: "What happens when you send" }
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: Theme.s6
-                            Repeater {
-                                model: inviteModal.happensRows
-                                delegate: RowLayout {
-                                    required property string modelData
-                                    required property int index
-                                    Layout.fillWidth: true
-                                    spacing: Theme.s8
-                                    Text {
-                                        text: (index + 1) + "."
-                                        font.family: Theme.mono; font.pixelSize: Theme.small
-                                        color: Theme.ink3
-                                        Layout.alignment: Qt.AlignTop
-                                    }
-                                    Text {
-                                        text: modelData
-                                        textFormat: Text.PlainText
-                                        font.family: Theme.sans; font.pixelSize: Theme.small
-                                        color: Theme.ink2
-                                        wrapMode: Text.Wrap
-                                        Layout.fillWidth: true
-                                    }
-                                }
-                            }
-                        }
-
-                        // Amber testnet notice. docs/03 M1 step 3 replaces the design's
-                        // Chat-address wording: a Chat address is never an identity, and the
-                        // envelope travels over a Delivery inbox topic (docs/04 §3).
-                        Rectangle {
-                            visible: !inviteModal.isCode || inviteModal.reviewMode
-                            Layout.fillWidth: true
-                            radius: Theme.rInner
-                            color: Theme.amberTint
-                            implicitHeight: noticeText.implicitHeight + Theme.s12 * 2
                             Text {
-                                id: noticeText
-                                anchors.left: parent.left
-                                anchors.right: parent.right
-                                anchors.verticalCenter: parent.verticalCenter
-                                anchors.margins: Theme.s12
-                                text: "Testnet: if they are offline for long, the network may drop the "
-                                      + "message. Resend from Members, Pending invites — nothing else "
-                                      + "needs redoing."
+                                text: "You can follow this in Members, Pending invites. A signed commit "
+                                      + "records the change in History once they accept."
                                 font.family: Theme.sans; font.pixelSize: Theme.meta
-                                color: Theme.amber
-                                wrapMode: Text.Wrap
-                            }
-                        }
-                    }
-
-                    // =============================================== STEP 4
-                    ColumnLayout {
-                        visible: inviteModal.step === 4
-                        Layout.fillWidth: true
-                        Layout.margins: Theme.s20
-                        spacing: Theme.s16
-
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: Theme.s4
-                            Text {
-                                text: inviteModal.doneTitle
-                                textFormat: Text.PlainText
-                                font.family: Theme.sans
-                                font.pixelSize: Theme.cardTitle
-                                font.weight: Theme.semibold
-                                color: Theme.ink
-                                wrapMode: Text.Wrap
-                                Layout.fillWidth: true
-                            }
-                            Text {
-                                text: inviteModal.doneSub
-                                textFormat: Text.PlainText
-                                font.family: Theme.sans
-                                font.pixelSize: Theme.small
                                 color: Theme.ink3
                                 wrapMode: Text.Wrap
                                 Layout.fillWidth: true
                             }
                         }
+                    }
+                }
 
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: Theme.s12
-                            Repeater {
-                                model: inviteModal.progressRows
-                                delegate: RowLayout {
-                                    required property var modelData
-                                    readonly property bool done: modelData.s === "done"
-                                    readonly property bool now: modelData.s === "now"
-                                    Layout.fillWidth: true
-                                    spacing: Theme.s12
+                Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.line }
 
-                                    Rectangle {
-                                        Layout.alignment: Qt.AlignVCenter
-                                        width: 14; height: 14; radius: 7
-                                        color: done ? Theme.accent : Theme.surface
-                                        border.width: 2
-                                        border.color: done ? Theme.accent
-                                                           : (now ? Theme.violet : Theme.inputBorder)
-                                    }
-                                    Text {
-                                        text: modelData.l
-                                        textFormat: Text.PlainText
-                                        font.family: Theme.sans; font.pixelSize: Theme.small
-                                        color: (done || now) ? Theme.ink : Theme.ink3
-                                        wrapMode: Text.Wrap
-                                        Layout.fillWidth: true
-                                    }
-                                    Text {
-                                        text: done ? "Done" : (now ? "Waiting" : "Not yet")
-                                        font.family: Theme.sans; font.pixelSize: Theme.meta
-                                        font.weight: Theme.medium
-                                        color: done ? Theme.accent : (now ? Theme.violet : Theme.ink3)
-                                    }
-                                }
-                            }
-                        }
+                // ---- footer ----
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.margins: Theme.s20
+                    spacing: Theme.s8
+
+                    Text {
+                        text: inviteModal.step < 4 ? ("Step " + inviteModal.step + " of 3") : "Invite pending"
+                        font.family: Theme.sans; font.pixelSize: Theme.meta
+                        color: Theme.ink3
+                        Layout.fillWidth: true
+                    }
+                    Button {
+                        visible: inviteModal.step === 2 || (inviteModal.step === 3 && !inviteModal.reviewMode)
+                        text: "Back"
+                        implicitHeight: Theme.touchTarget
+                        Accessible.name: "Back"
+                        onClicked: inviteModal.step = inviteModal.step - 1
+                    }
+                    Button {
+                        visible: inviteModal.step === 4
+                        text: "Invite another"
+                        implicitHeight: Theme.touchTarget
+                        Accessible.name: "Invite another member"
+                        onClicked: { inviteModal.reset(); idField.forceActiveFocus(); }
+                    }
+                    Button {
+                        id: primaryButton
+                        text: inviteModal.primaryLabel
+                        implicitHeight: Theme.touchTarget
+                        highlighted: true
+                        enabled: inviteModal.canContinue
+                        Accessible.name: inviteModal.primaryLabel
+                        onClicked: inviteModal.advance()
+                    }
+                }
+            }
+
+            // ---- discard confirmation, drawn inside the modal so focus stays trapped ----
+            // docs/03 asks for this confirmation but does not write its copy, and it is
+            // not in the design files; the wording below is the minimum that is true.
+            Rectangle {
+                anchors.fill: parent
+                visible: inviteModal.confirmDiscard
+                color: Theme.backdrop
+                radius: Theme.rModal
+
+                MouseArea { anchors.fill: parent }    // swallow clicks behind the card
+
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: Math.min(400, parent.width - Theme.s32 * 2)
+                    height: discardCol.implicitHeight + Theme.s20 * 2
+                    radius: Theme.rPanel
+                    color: Theme.surface
+                    border.width: 1
+                    border.color: Theme.line
+
+                    ColumnLayout {
+                        id: discardCol
+                        anchors.fill: parent
+                        anchors.margins: Theme.s20
+                        spacing: Theme.s12
 
                         Text {
-                            text: "You can follow this in Members, Pending invites. A signed commit "
-                                  + "records the change in History once they accept."
-                            font.family: Theme.sans; font.pixelSize: Theme.meta
+                            text: "Discard this invite?"
+                            font.family: Theme.sans
+                            font.pixelSize: Theme.sectionTitle
+                            font.weight: Theme.semibold
+                            color: Theme.ink
+                            wrapMode: Text.Wrap
+                            Layout.fillWidth: true
+                        }
+                        Text {
+                            text: "Nothing has been sent yet."
+                            font.family: Theme.sans
+                            font.pixelSize: Theme.small
                             color: Theme.ink3
                             wrapMode: Text.Wrap
                             Layout.fillWidth: true
                         }
-                    }
-                }
-            }
-
-            Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.line }
-
-            // ---- footer ----
-            RowLayout {
-                Layout.fillWidth: true
-                Layout.margins: Theme.s20
-                spacing: Theme.s8
-
-                Text {
-                    text: inviteModal.step < 4 ? ("Step " + inviteModal.step + " of 3") : "Invite pending"
-                    font.family: Theme.sans; font.pixelSize: Theme.meta
-                    color: Theme.ink3
-                    Layout.fillWidth: true
-                }
-                Button {
-                    visible: inviteModal.step === 2 || (inviteModal.step === 3 && !inviteModal.reviewMode)
-                    text: "Back"
-                    implicitHeight: Theme.touchTarget
-                    Accessible.name: "Back"
-                    onClicked: inviteModal.step = inviteModal.step - 1
-                }
-                Button {
-                    visible: inviteModal.step === 4
-                    text: "Invite another"
-                    implicitHeight: Theme.touchTarget
-                    Accessible.name: "Invite another member"
-                    onClicked: { inviteModal.reset(); idField.forceActiveFocus(); }
-                }
-                Button {
-                    id: primaryButton
-                    text: inviteModal.primaryLabel
-                    implicitHeight: Theme.touchTarget
-                    highlighted: true
-                    enabled: inviteModal.canContinue
-                    Accessible.name: inviteModal.primaryLabel
-                    onClicked: inviteModal.advance()
-                }
-            }
-        }
-
-        // ---- discard confirmation, drawn inside the modal so focus stays trapped ----
-        // docs/03 asks for this confirmation but does not write its copy, and it is
-        // not in the design files; the wording below is the minimum that is true.
-        Rectangle {
-            parent: inviteModal.contentItem
-            anchors.fill: parent
-            visible: inviteModal.confirmDiscard
-            color: Theme.backdrop
-            radius: Theme.rModal
-
-            MouseArea { anchors.fill: parent }    // swallow clicks behind the card
-
-            Rectangle {
-                anchors.centerIn: parent
-                width: Math.min(400, parent.width - Theme.s32 * 2)
-                height: discardCol.implicitHeight + Theme.s20 * 2
-                radius: Theme.rPanel
-                color: Theme.surface
-                border.width: 1
-                border.color: Theme.line
-
-                ColumnLayout {
-                    id: discardCol
-                    anchors.fill: parent
-                    anchors.margins: Theme.s20
-                    spacing: Theme.s12
-
-                    Text {
-                        text: "Discard this invite?"
-                        font.family: Theme.sans
-                        font.pixelSize: Theme.sectionTitle
-                        font.weight: Theme.semibold
-                        color: Theme.ink
-                        wrapMode: Text.Wrap
-                        Layout.fillWidth: true
-                    }
-                    Text {
-                        text: "Nothing has been sent yet."
-                        font.family: Theme.sans
-                        font.pixelSize: Theme.small
-                        color: Theme.ink3
-                        wrapMode: Text.Wrap
-                        Layout.fillWidth: true
-                    }
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: Theme.s8
-                        Item { Layout.fillWidth: true }
-                        Button {
-                            text: "Keep editing"
-                            implicitHeight: Theme.touchTarget
-                            Accessible.name: "Keep editing"
-                            onClicked: inviteModal.confirmDiscard = false
-                        }
-                        Button {
-                            text: "Discard"
-                            implicitHeight: Theme.touchTarget
-                            highlighted: true
-                            Accessible.name: "Discard this invite"
-                            onClicked: { inviteModal.confirmDiscard = false; inviteModal.close(); }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: Theme.s8
+                            Item { Layout.fillWidth: true }
+                            Button {
+                                text: "Keep editing"
+                                implicitHeight: Theme.touchTarget
+                                Accessible.name: "Keep editing"
+                                onClicked: inviteModal.confirmDiscard = false
+                            }
+                            Button {
+                                text: "Discard"
+                                implicitHeight: Theme.touchTarget
+                                highlighted: true
+                                Accessible.name: "Discard this invite"
+                                onClicked: { inviteModal.confirmDiscard = false; inviteModal.close(); }
+                            }
                         }
                     }
                 }

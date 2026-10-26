@@ -29,6 +29,7 @@ public:
     void createNote(QString title, QString body) override;
     void promoteNote(QString noteId, QString projectId, QString stage) override;
     void saveProfile(QString name, QString orcid) override;
+    void openRecord(QString recordId) override;
 
     /// Fires when ui-host hands the plugin its LogosAPI, so subscriptions are
     /// live before the view makes its first call.

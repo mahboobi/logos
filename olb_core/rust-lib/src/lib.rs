@@ -26,6 +26,16 @@ const DELIVERY_CFG: &str = r#"{"mode":"Core","preset":"logos.test"}"#;
 /// Storage upload/download chunk size in bytes (the contract's default).
 const STORAGE_CHUNK: i64 = 65536;
 
+/// Usable payload budget for one Delivery `send`.
+///
+/// logos.test sets maxMessageSize to 150 KiB and the limit is applied to the
+/// ENCODED WakuMessage, not the payload, so the usable budget is lower. An
+/// oversize publish is dropped inside GossipSub and surfaces as
+/// NoPeersToPublish — identical to having no peers — so we must refuse it
+/// here rather than discover it as a phantom connectivity problem
+/// (docs/09-sync-design.md).
+const SEND_BUDGET: usize = 144 * 1024;
+
 /// Trait name is not free: it is the metadata.json module name in PascalCase
 /// with `Module` appended — `olb_core` -> `OlbCoreModule`. `Send + 'static` is
 /// required because the generated dispatch stores the impl as
@@ -89,6 +99,15 @@ pub trait OlbCoreModule: Send + 'static {
     /// Projects this node knows about, as a JSON array.
     fn projects(&mut self) -> String;
 
+    /// S6 History. Fixture-backed until the commit DAG lands (docs/10).
+    fn history(&mut self) -> String;
+
+    /// S7 Members. Fixture-backed until membership records land (docs/11).
+    fn members(&mut self) -> String;
+
+    /// One record by id, for S2. Fixture-backed until the record store lands.
+    fn record(&mut self, record_id: String) -> String;
+
     /// Called once the module is wired to the host. `ctx` carries the
     /// host-stamped instance id and persistence path.
     fn on_context_ready(&mut self, _ctx: &RustModuleContext) {}
@@ -148,7 +167,19 @@ mod record {
 // the dedup set live in statics.
 // ---------------------------------------------------------------------------
 static RECEIVED: Mutex<Vec<serde_json::Value>> = Mutex::new(Vec::new());
-static SEEN_HASHES: Mutex<Vec<String>> = Mutex::new(Vec::new());
+/// Dedup window. Was an unbounded Vec scanned with contains(): O(n) on every
+/// inbound message and it never shrank. A set plus a bounded FIFO keeps the
+/// lookup O(1) and the memory flat. The DAG is the real dedup authority
+/// (docs/09) — this only suppresses the immediate replay storm, so a window
+/// is sufficient.
+// BTreeSet, not HashSet: HashSet::new() is not const (RandomState), so it
+// cannot initialise a static. Ordered lookup is O(log n), still far better
+// than the linear Vec scan it replaces.
+static SEEN_HASHES: Mutex<std::collections::BTreeSet<String>> =
+    Mutex::new(std::collections::BTreeSet::new());
+static SEEN_ORDER: Mutex<std::collections::VecDeque<String>> =
+    Mutex::new(std::collections::VecDeque::new());
+const SEEN_WINDOW: usize = 4096;
 static NODE_READY: Mutex<bool> = Mutex::new(false);
 static STORAGE_READY: Mutex<bool> = Mutex::new(false);
 static CIDS: Mutex<Vec<serde_json::Value>> = Mutex::new(Vec::new());
@@ -475,6 +506,14 @@ mod canon {
 /// Domain separation: a commit signature must never verify as anything else.
 const COMMIT_DOMAIN: &[u8] = b"olb.commit.v1\0";
 
+/// Pull one top-level section out of the compiled-in fixture document.
+fn fixture_part(key: &str) -> serde_json::Value {
+    serde_json::from_str::<serde_json::Value>(FIXTURES)
+        .ok()
+        .and_then(|v| v.get(key).cloned())
+        .unwrap_or_else(|| serde_json::json!({}))
+}
+
 /// Storage events carry a single `payload: tstr` holding JSON — unwrap the
 /// event array's first element, then parse it.
 fn storage_payload(ev: &logos_rust_sdk::EventData) -> Option<serde_json::Value> {
@@ -571,6 +610,16 @@ impl OlbCoreModule for OlbCore {
         let envelope = record::signed(&author, payload, &hex::encode(sig.to_bytes()));
 
         let wire = envelope.to_string();
+        if wire.len() > SEND_BUDGET {
+            return record::err(
+                "invalid",
+                &format!(
+                    "record is {} bytes, over the {SEND_BUDGET}-byte Delivery budget; \
+                     large content belongs in Storage with only its CID in the record",
+                    wire.len()
+                ),
+            );
+        }
         match modules().delivery_module.send(RECORD_TOPIC, wire.as_bytes()) {
             Ok(_) => wire,
             Err(e) => record::err("offline", &format!("delivery send failed: {e:?}")),
@@ -837,6 +886,38 @@ impl OlbCoreModule for OlbCore {
         }
     }
 
+    fn history(&mut self) -> String {
+        // The live commit log is already real; the branches, tags, diff and
+        // merge-request shapes S6 renders are not yet. Serve the fixture for
+        // those and splice in the real commits so the screen is not a total
+        // fiction (docs/10 specifies the real model).
+        let mut h = fixture_part("history");
+        let st = store::load();
+        if let (Some(obj), Some(real)) = (h.as_object_mut(), st.get("commits")) {
+            obj.insert("liveCommits".into(), real.clone());
+        }
+        h.to_string()
+    }
+
+    fn members(&mut self) -> String {
+        fixture_part("members").to_string()
+    }
+
+    fn record(&mut self, record_id: String) -> String {
+        let all = fixture_part("records");
+        all.get(&record_id)
+            .cloned()
+            .map(|mut v| {
+                // The fixture keys records by id but does not carry the id
+                // inside the record; S2 needs it to emit openHistory/openFile.
+                if let Some(o) = v.as_object_mut() {
+                    o.insert("id".into(), serde_json::Value::String(record_id.clone()));
+                }
+                v.to_string()
+            })
+            .unwrap_or_else(|| record::err("not_found", &format!("no record {record_id}")))
+    }
+
     fn fixtures_enabled(&mut self) -> bool {
         fixtures_on()
     }
@@ -1043,10 +1124,16 @@ fn bring_up(persistence_path: &str) {
                     // requires dedup by messageHash.
                     {
                         let mut seen = SEEN_HASHES.lock().unwrap();
-                        if seen.contains(&msg.message_hash) {
+                        if !seen.insert(msg.message_hash.clone()) {
                             continue;
                         }
-                        seen.push(msg.message_hash.clone());
+                        let mut order = SEEN_ORDER.lock().unwrap();
+                        order.push_back(msg.message_hash.clone());
+                        while order.len() > SEEN_WINDOW {
+                            if let Some(old) = order.pop_front() {
+                                seen.remove(&old);
+                            }
+                        }
                     }
                     // Unsigned or tampered records are dropped, not shown.
                     let Some(rec) = verify(&msg.payload) else {

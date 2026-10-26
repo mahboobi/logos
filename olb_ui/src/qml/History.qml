@@ -232,15 +232,57 @@ Item {
                         // for two chosen commits. No backend method yet.
                     }
                 }
-                Button {
-                    text: "New branch"
-                    implicitHeight: Theme.touchTarget
-                    highlighted: true
+                // Accent primary. A Controls Button cannot be restyled under the
+                // platform style this app runs with (its `highlighted` fill is
+                // the system accent, which is not in the palette), so primary
+                // actions are built from a focusable Rectangle — the pattern
+                // FilterPills and ChoiceCard already use.
+                Rectangle {
+                    id: newBranchButton
                     Layout.alignment: Qt.AlignBottom
-                    Accessible.name: "New branch"
-                    onClicked: {
+                    implicitHeight: Theme.touchTarget
+                    implicitWidth: newBranchLabel.implicitWidth + Theme.s20 * 2
+                    radius: Theme.rControl
+                    color: Theme.accent
+                    opacity: newBranchPress.pressed ? 0.88 : 1
+
+                    function activate() {
                         // TODO(phase1b): vcs.branch(name, fromCommit).
                     }
+
+                    Accessible.role: Accessible.Button
+                    Accessible.name: "New branch"
+                    Accessible.onPressAction: newBranchButton.activate()
+                    activeFocusOnTab: true
+
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: -3
+                        radius: Theme.rControl
+                        color: "transparent"
+                        border.width: 2
+                        border.color: Theme.violet
+                        visible: parent.activeFocus
+                    }
+
+                    Text {
+                        id: newBranchLabel
+                        anchors.centerIn: parent
+                        text: "New branch"
+                        font.family: Theme.sans
+                        font.pixelSize: Theme.body
+                        font.weight: Theme.semibold
+                        color: Theme.textOnAccent
+                    }
+
+                    MouseArea {
+                        id: newBranchPress
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: newBranchButton.activate()
+                    }
+                    Keys.onReturnPressed: newBranchButton.activate()
+                    Keys.onSpacePressed: newBranchButton.activate()
                 }
             }
 
@@ -518,26 +560,56 @@ Item {
                             Layout.fillWidth: true
                         }
 
-                        Button {
+                        // A text link, 44 px tall. Controls cannot be restyled on
+                        // the platform style this app runs under, so links and
+                        // violet buttons are built from a focusable Rectangle —
+                        // the same pattern as FilterPills and ChoiceCard.
+                        Rectangle {
+                            id: olderLink
                             visible: page.commits.length > 0
-                            flat: true
-                            implicitHeight: Theme.touchTarget
                             Layout.alignment: Qt.AlignHCenter
+                            implicitHeight: Theme.touchTarget
+                            implicitWidth: olderLabel.implicitWidth + Theme.s16 * 2
+                            radius: Theme.rControl
+                            color: "transparent"
+
+                            function activate() {
+                                // TODO(phase1b): vcs.log({ branch, limit, before })
+                                // for paging. The count is the design's copy until
+                                // the core reports how many older commits exist.
+                            }
+
+                            Accessible.role: Accessible.Link
                             Accessible.name: "Show 40 older commits"
-                            contentItem: Text {
+                            Accessible.onPressAction: olderLink.activate()
+                            activeFocusOnTab: true
+
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: Theme.rControl
+                                color: "transparent"
+                                border.width: 2
+                                border.color: Theme.violet
+                                visible: parent.activeFocus
+                            }
+
+                            Text {
+                                id: olderLabel
+                                anchors.centerIn: parent
                                 text: "Show 40 older commits"
                                 font.family: Theme.sans
                                 font.pixelSize: Theme.body
                                 font.weight: Theme.medium
                                 color: Theme.accent
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
                             }
-                            onClicked: {
-                                // TODO(phase1b): vcs.log({ branch, limit, before })
-                                // for paging. The count is the design's copy until
-                                // the core reports how many older commits exist.
+
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: olderLink.activate()
                             }
+                            Keys.onReturnPressed: olderLink.activate()
+                            Keys.onSpacePressed: olderLink.activate()
                         }
                     }
 
@@ -965,30 +1037,52 @@ Item {
                                 Layout.fillWidth: true
                                 spacing: Theme.s8
 
-                                Button {   // violet primary: review a branch merge
+                                // Violet primary: merging a branch is a "current /
+                                // committed" action, not a green verified one.
+                                Rectangle {
                                     id: reviewButton
                                     Layout.fillWidth: true
                                     implicitHeight: Theme.touchTarget
-                                    Accessible.name: "Review changes"
-                                    background: Rectangle {
-                                        radius: Theme.rControl
-                                        color: Theme.violet
-                                        opacity: reviewButton.down ? 0.88 : 1
-                                        border.width: 1
-                                        border.color: Theme.violet
+                                    radius: Theme.rControl
+                                    color: Theme.violet
+                                    opacity: reviewPress.pressed ? 0.88 : 1
+
+                                    function activate() {
+                                        // TODO(phase1b): vcs.reviewMerge(mrId).
                                     }
-                                    contentItem: Text {
+
+                                    Accessible.role: Accessible.Button
+                                    Accessible.name: "Review changes"
+                                    Accessible.onPressAction: reviewButton.activate()
+                                    activeFocusOnTab: true
+
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        anchors.margins: -3
+                                        radius: Theme.rControl
+                                        color: "transparent"
+                                        border.width: 2
+                                        border.color: Theme.violet
+                                        visible: parent.activeFocus
+                                    }
+
+                                    Text {
+                                        anchors.centerIn: parent
                                         text: "Review changes"
                                         font.family: Theme.sans
                                         font.pixelSize: Theme.body
                                         font.weight: Theme.semibold
                                         color: Theme.textOnAccent
-                                        horizontalAlignment: Text.AlignHCenter
-                                        verticalAlignment: Text.AlignVCenter
                                     }
-                                    onClicked: {
-                                        // TODO(phase1b): vcs.reviewMerge(mrId).
+
+                                    MouseArea {
+                                        id: reviewPress
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: reviewButton.activate()
                                     }
+                                    Keys.onReturnPressed: reviewButton.activate()
+                                    Keys.onSpacePressed: reviewButton.activate()
                                 }
                                 Button {
                                     text: "Comment"

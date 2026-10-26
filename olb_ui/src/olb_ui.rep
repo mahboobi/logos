@@ -20,6 +20,7 @@ class OlbUi
     SLOT(void createNote(QString title, QString body))
     SLOT(void promoteNote(QString noteId, QString projectId, QString stage))
     SLOT(void saveProfile(QString name, QString orcid))
+    SLOT(void openRecord(QString recordId))
 
     // ---- Auto-synced to every QML replica via QtRO ----
     // The S1 project board (docs/03), as a JSON object.
@@ -29,6 +30,11 @@ class OlbUi
     PROP(QString notes="[]" READONLY)
     PROP(QString projects="[]" READONLY)
     PROP(QString profile="{}" READONLY)
+    // S6 / S7 / S2 payloads. Fixture-backed for the parts the store does not
+    // model yet; olb_core says which via fixtures_enabled().
+    PROP(QString history="{}" READONLY)
+    PROP(QString members="{}" READONLY)
+    PROP(QString openedRecord="{}" READONLY)
     // Last create/promote outcome, for inline error reporting.
     PROP(QString lastActionResult="" READONLY)
     PROP(QString coreStatus="" READONLY)
