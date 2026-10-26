@@ -26,6 +26,14 @@ void OlbUiBackend::syncFromCore()
     setIdentity(modules().olb_core.identity_fingerprint());
     setRecords(modules().olb_core.received_records());
     setCids(modules().olb_core.stored_cids());
+    setBoard(modules().olb_core.board());
+    setFixtures(modules().olb_core.fixtures_enabled());
+}
+
+void OlbUiBackend::refreshBoard()
+{
+    setBoard(modules().olb_core.board());
+    setFixtures(modules().olb_core.fixtures_enabled());
 }
 
 void OlbUiBackend::refreshSessionStatus()

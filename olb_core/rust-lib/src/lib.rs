@@ -55,6 +55,14 @@ pub trait OlbCoreModule: Send + 'static {
     /// CIDs this node has uploaded or fetched, as a JSON array.
     fn stored_cids(&mut self) -> String;
 
+    /// Phase 1a: the project board (docs/03 S1), as a JSON object.
+    /// Serves fixture data while the record store does not exist yet; the
+    /// shape is the contract either way.
+    fn board(&mut self) -> String;
+
+    /// Whether this module is serving fixtures rather than live data.
+    fn fixtures_enabled(&mut self) -> bool;
+
     /// Called once the module is wired to the host. `ctx` carries the
     /// host-stamped instance id and persistence path.
     fn on_context_ready(&mut self, _ctx: &RustModuleContext) {}
@@ -139,6 +147,17 @@ impl OlbCore {
     fn author_hex(&self) -> String {
         hex::encode(self.signing.verifying_key().to_bytes())
     }
+}
+
+/// The fixture document, compiled in. Phase 1a builds every screen against
+/// fixtures/sample-project.json before wiring live data (CLAUDE.md UI rules).
+/// Live data replaces the body of each accessor, not its shape.
+const FIXTURES: &str = include_str!("../fixtures/sample-project.json");
+
+/// Fixture mode is on unless OLB_FIXTURES=0. Phase 1a has no record store to
+/// read from yet, so the default is on; it flips once Phase 1b lands.
+fn fixtures_on() -> bool {
+    !matches!(std::env::var("OLB_FIXTURES").as_deref(), Ok("0"))
 }
 
 /// Storage events carry a single `payload: tstr` holding JSON — unwrap the
@@ -263,6 +282,25 @@ impl OlbCoreModule for OlbCore {
         {
             Ok(v) => serde_json::json!({"ok": true, "data": {"session": v}}).to_string(),
             Err(e) => record::err("storage_error", &format!("{e:?}")),
+        }
+    }
+
+    fn fixtures_enabled(&mut self) -> bool {
+        fixtures_on()
+    }
+
+    fn board(&mut self) -> String {
+        if !fixtures_on() {
+            // Phase 1b replaces this with the record store.
+            return record::err("not_found", "live board needs the record store (Phase 1b)");
+        }
+        match serde_json::from_str::<serde_json::Value>(FIXTURES) {
+            Ok(v) => v
+                .get("board")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!({}))
+                .to_string(),
+            Err(e) => record::err("internal", &format!("fixture parse failed: {e}")),
         }
     }
 

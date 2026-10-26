@@ -13,7 +13,13 @@ class OlbUi
     SLOT(void uploadFile(QString absPath))
     SLOT(void fetchFile(QString cid, QString absDest))
 
+    // ---- Phase 1a: screens ----
+    SLOT(void refreshBoard())
+
     // ---- Auto-synced to every QML replica via QtRO ----
+    // The S1 project board (docs/03), as a JSON object.
+    PROP(QString board="{}" READONLY)
+    PROP(bool fixtures=false READONLY)
     PROP(QString coreStatus="" READONLY)
     PROP(bool coreReachable=false READONLY)
     // JSON array of verified records received from peers, newest first.

@@ -23,6 +23,7 @@ public:
     void publishTestRecord(QString title) override;
     void uploadFile(QString absPath) override;
     void fetchFile(QString cid, QString absDest) override;
+    void refreshBoard() override;
 
     /// Fires when ui-host hands the plugin its LogosAPI, so subscriptions are
     /// live before the view makes its first call.

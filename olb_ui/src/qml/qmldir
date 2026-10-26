@@ -1,3 +1,9 @@
 module com.logos.module.olb_ui
 singleton Theme 1.0 Theme.qml
 Panel 1.0 Panel.qml
+Badge 1.0 Badge.qml
+StatusCard 1.0 StatusCard.qml
+FilterPills 1.0 FilterPills.qml
+IdeaCard 1.0 IdeaCard.qml
+Board 1.0 Board.qml
+Diagnostics 1.0 Diagnostics.qml
