@@ -24,6 +24,8 @@ Rectangle {
     readonly property var notesModel: parseJson(backend ? backend.notes : "[]", [])
     readonly property var projectsModel: parseJson(backend ? backend.projects : "[]", [])
     readonly property var profileObj: parseJson(backend ? backend.profile : "{}", ({}))
+    readonly property var boardProjects: root.boardData.projects || []
+    readonly property var sessionObj: parseJson(backend ? backend.coreStatus : "{}", ({}))
 
     // docs/03 nav. `done` marks what actually exists today.
     readonly property var navItems: [
@@ -110,6 +112,63 @@ Rectangle {
                     }
                 }
 
+                Text {
+                    text: "PROJECTS"
+                    font.family: Theme.sans
+                    font.pixelSize: Theme.overline
+                    font.weight: Theme.medium
+                    font.letterSpacing: Theme.overlineSpacing
+                    color: Theme.ink3
+                    Layout.margins: Theme.s8
+                    Layout.topMargin: Theme.s12
+                    visible: root.boardProjects.length > 0
+                }
+
+                Repeater {
+                    model: root.boardProjects
+                    delegate: Rectangle {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        implicitHeight: Theme.touchTarget
+                        radius: Theme.rControl
+                        color: modelData.current ? Theme.accentTint : "transparent"
+
+                        Accessible.role: Accessible.Button
+                        Accessible.name: modelData.title
+                        activeFocusOnTab: true
+
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.leftMargin: Theme.s12
+                            anchors.rightMargin: Theme.s8
+                            text: modelData.title || "Untitled"
+                            font.family: Theme.sans
+                            font.pixelSize: Theme.small
+                            font.weight: modelData.current ? Theme.medium : Theme.regular
+                            color: modelData.current ? Theme.accent : Theme.ink2
+                            elide: Text.ElideRight
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                root.backend.setCurrentProject(modelData.id);
+                                root.screen = "Public Board";
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.topMargin: Theme.s12
+                    height: 1
+                    color: Theme.lineSoft
+                    visible: root.boardProjects.length > 0
+                }
+
                 Repeater {
                     model: root.navItems
                     delegate: Rectangle {
@@ -166,6 +225,9 @@ Rectangle {
                 onOpenHistory: function (ideaId) {
                     console.log("[olb_ui] open history for:", ideaId);
                 }
+                onNewProject: root.screen = "New project"
+                onNewEntry: root.screen = "Personal Notebook"
+                onRefresh: if (root.backend) root.backend.refreshBoard()
             }
 
             Notebook {
@@ -177,6 +239,7 @@ Rectangle {
             NewProject {
                 backend: root.backend
                 onCreated: root.screen = "Public Board"
+                onCancelled: root.screen = "Public Board"
             }
 
             Settings {

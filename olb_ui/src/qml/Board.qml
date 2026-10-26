@@ -9,6 +9,9 @@ Item {
     property bool fixtures: false
     signal openRecord(string recordId)
     signal openHistory(string ideaId)
+    signal newProject()
+    signal newEntry()
+    signal refresh()
 
     readonly property var ideas: boardData.ideas || []
     readonly property var stages: boardData.stagesUsed || []
@@ -81,15 +84,23 @@ Item {
                     }
 
                     Button {
+                        text: "Refresh"
+                        implicitHeight: Theme.touchTarget
+                        Accessible.name: "Refresh the board"
+                        onClicked: board.refresh()
+                    }
+                    Button {
                         text: "New notebook entry"
                         implicitHeight: Theme.touchTarget
                         Accessible.name: "New notebook entry"
+                        onClicked: board.newEntry()
                     }
                     Button {
                         text: "New project"
                         implicitHeight: Theme.touchTarget
                         highlighted: true
                         Accessible.name: "New project"
+                        onClicked: board.newProject()
                     }
                 }
 
@@ -209,7 +220,9 @@ Item {
                 border.color: Theme.dashed
                 Text {
                     anchors.centerIn: parent
-                    text: "No ideas are at this stage right now."
+                    text: board.ideas.length === 0 && board.filter === "All"
+                          ? "No ideas yet. Promote a note from your Personal Notebook, or add one here."
+                          : "No ideas are at this stage right now."
                     font.family: Theme.sans
                     font.pixelSize: Theme.body
                     color: Theme.ink3

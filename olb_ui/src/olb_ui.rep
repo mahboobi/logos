@@ -15,7 +15,8 @@ class OlbUi
 
     // ---- Phase 1a: screens ----
     SLOT(void refreshBoard())
-    SLOT(void createProject(QString title, QString summary, QString privacy))
+    SLOT(void createProject(QString specJson))
+    SLOT(void setCurrentProject(QString projectId))
     SLOT(void createNote(QString title, QString body))
     SLOT(void promoteNote(QString noteId, QString projectId, QString stage))
     SLOT(void saveProfile(QString name, QString orcid))

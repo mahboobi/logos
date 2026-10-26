@@ -63,8 +63,12 @@ pub trait OlbCoreModule: Send + 'static {
     /// Whether this module is serving fixtures rather than live data.
     fn fixtures_enabled(&mut self) -> bool;
 
-    /// Create a project. Produces a signed commit. Returns the project JSON.
-    fn create_project(&mut self, title: String, summary: String, privacy: String) -> String;
+    /// Create a project from a JSON spec (docs/03 S8: basics, field and team,
+    /// stages, privacy, anchoring, references). Produces a signed commit.
+    fn create_project(&mut self, spec_json: String) -> String;
+
+    /// Choose which project the board shows. Returns the project JSON.
+    fn set_current_project(&mut self, project_id: String) -> String;
 
     /// Personal notebook: a private note, not part of any project.
     fn create_note(&mut self, title: String, body: String) -> String;
@@ -486,16 +490,68 @@ impl OlbCoreModule for OlbCore {
         }
     }
 
-    fn create_project(&mut self, title: String, summary: String, privacy: String) -> String {
-        if title.trim().is_empty() {
+    fn set_current_project(&mut self, project_id: String) -> String {
+        let mut st = store::load();
+        let exists = st
+            .get("projects")
+            .and_then(|v| v.as_array())
+            .map(|a| a.iter().any(|p| p.get("id").and_then(|i| i.as_str()) == Some(&project_id)))
+            .unwrap_or(false);
+        if !exists {
+            return record::err("not_found", &format!("no project {project_id}"));
+        }
+        st["current"] = serde_json::Value::String(project_id);
+        match store::save(&st) {
+            Ok(()) => {
+                announce_store();
+                st["current"].to_string()
+            }
+            Err(e) => record::err("internal", &e),
+        }
+    }
+
+    fn create_project(&mut self, spec_json: String) -> String {
+        let spec: serde_json::Value =
+            serde_json::from_str(&spec_json).unwrap_or_else(|_| serde_json::json!({}));
+        let title = spec.get("title").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+        if title.is_empty() {
             return record::err("invalid", "a project needs a title");
         }
+        let str_of = |k: &str| spec.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string();
+
+        // Stages the project uses. Skipped stages are hidden from the board
+        // and can be turned on later (docs/03 S8 §3), so the board must read
+        // this rather than assume all six.
+        let stages = spec
+            .get("stages")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_else(|| STAGES.iter().map(|s| serde_json::json!(s)).collect());
+
         let mut st = store::load();
         let project = serde_json::json!({
             "id": new_id("proj"),
-            "title": title.trim(),
-            "summary": summary.trim(),
-            "privacy": if privacy.trim().is_empty() { "Private · project group" } else { privacy.trim() },
+            "title": title,
+            "summary": str_of("summary"),
+            "description": str_of("description"),
+            "startDate": str_of("startDate"),
+            "duration": str_of("duration"),
+            "licence": str_of("licence"),
+            "field": str_of("field"),
+            "keywords": spec.get("keywords").cloned().unwrap_or_else(|| serde_json::json!([])),
+            "teamSize": str_of("teamSize"),
+            "team": spec.get("team").cloned().unwrap_or_else(|| serde_json::json!([])),
+            "stages": stages,
+            // Privacy cannot change after creation (docs/03 S8 §4), so it is
+            // written once here and never updated.
+            "privacy": if str_of("privacy").is_empty() { "Private".to_string() } else { str_of("privacy") },
+            "anchoring": str_of("anchoring"),
+            "approvals": str_of("approvals"),
+            "replica": str_of("replica"),
+            "allowBranches": spec.get("allowBranches").and_then(|v| v.as_bool()).unwrap_or(true),
+            "autoTag": spec.get("autoTag").and_then(|v| v.as_bool()).unwrap_or(true),
+            "references": spec.get("references").cloned().unwrap_or_else(|| serde_json::json!([])),
+            "grant": str_of("grant"),
             "createdAt": now_ms(),
             "author": self.author_hex(),
             "ideas": [],
@@ -503,6 +559,7 @@ impl OlbCoreModule for OlbCore {
         st["projects"]
             .as_array_mut()
             .map(|a| a.push(project.clone()));
+        st["current"] = project["id"].clone();
         self.commit(&mut st, "project.create", project.clone());
         match store::save(&st) {
             Ok(()) => {
@@ -637,8 +694,13 @@ impl OlbCoreModule for OlbCore {
         let projects = st.get("projects").and_then(|v| v.as_array()).cloned().unwrap_or_default();
         let commits = st.get("commits").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0);
 
-        // One board per node for now: the first project, or an empty shell.
-        let current = projects.last().cloned();
+        // The selected project, falling back to the most recent.
+        let current_id = st.get("current").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let current = projects
+            .iter()
+            .find(|p| p.get("id").and_then(|i| i.as_str()) == Some(current_id.as_str()))
+            .cloned()
+            .or_else(|| projects.last().cloned());
         let ideas = current
             .as_ref()
             .and_then(|p| p.get("ideas"))
@@ -697,7 +759,18 @@ impl OlbCoreModule for OlbCore {
                     "sub": format!("{received} record{} received from peers", if received == 1 { "" } else { "s" }),
                 },
             },
-            "stagesUsed": STAGES,
+            // The project's own stage list — a project may skip stages.
+            "stagesUsed": current
+                .as_ref()
+                .and_then(|p| p.get("stages"))
+                .cloned()
+                .unwrap_or_else(|| STAGES.iter().map(|s| serde_json::json!(s)).collect()),
+            // Every project, for the sidebar list.
+            "projects": projects.iter().map(|p| serde_json::json!({
+                "id": p.get("id").cloned().unwrap_or(serde_json::Value::Null),
+                "title": p.get("title").cloned().unwrap_or(serde_json::Value::Null),
+                "current": p.get("id").and_then(|i| i.as_str()) == Some(current_id.as_str()),
+            })).collect::<Vec<_>>(),
             "ideas": ideas,
             "activity": st.get("commits").and_then(|v| v.as_array()).map(|a| {
                 a.iter().rev().take(8).map(|c| serde_json::json!({

@@ -24,7 +24,8 @@ public:
     void uploadFile(QString absPath) override;
     void fetchFile(QString cid, QString absDest) override;
     void refreshBoard() override;
-    void createProject(QString title, QString summary, QString privacy) override;
+    void createProject(QString specJson) override;
+    void setCurrentProject(QString projectId) override;
     void createNote(QString title, QString body) override;
     void promoteNote(QString noteId, QString projectId, QString stage) override;
     void saveProfile(QString name, QString orcid) override;

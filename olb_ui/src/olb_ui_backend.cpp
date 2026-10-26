@@ -39,9 +39,15 @@ void OlbUiBackend::refreshBoard()
     setProfile(modules().olb_core.profile());
 }
 
-void OlbUiBackend::createProject(QString title, QString summary, QString privacy)
+void OlbUiBackend::createProject(QString specJson)
 {
-    setLastActionResult(modules().olb_core.create_project(title, summary, privacy));
+    setLastActionResult(modules().olb_core.create_project(specJson));
+    refreshBoard();
+}
+
+void OlbUiBackend::setCurrentProject(QString projectId)
+{
+    setLastActionResult(modules().olb_core.set_current_project(projectId));
     refreshBoard();
 }
 
