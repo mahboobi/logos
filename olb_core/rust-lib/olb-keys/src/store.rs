@@ -33,6 +33,7 @@ const AAD_RECORDS: &str = "olb.store.records.v1";
 const AAD_REFS: &str = "olb.store.refs.v1";
 const AAD_PENDING: &str = "olb.store.pending.v1";
 const AAD_STATE: &str = "olb.store.state.v1";
+const AAD_SECRETS: &str = "olb.store.secrets.v1";
 
 /// Where a profile's data lives.
 ///
@@ -128,6 +129,27 @@ impl DurableStore {
             )),
             None => Ok(None),
         }
+    }
+
+    /// Project keys and salts.
+    ///
+    /// A SEPARATE file from `state`, not another key inside it. `state` is
+    /// the document the screens read, and CLAUDE.md is explicit that the UI
+    /// never sees a project key or a salt. Keeping them in one document
+    /// makes that a discipline someone has to remember; keeping them apart
+    /// makes it a property of the type.
+    pub fn read_secrets(&self) -> Result<Option<serde_json::Value>> {
+        match vault::read_sealed(&self.dir.join("secrets.json"), &self.key, AAD_SECRETS)? {
+            Some(b) => Ok(Some(
+                serde_json::from_slice(&b).map_err(|e| KeyError::Malformed(e.to_string()))?,
+            )),
+            None => Ok(None),
+        }
+    }
+
+    pub fn write_secrets(&self, v: &serde_json::Value) -> Result<()> {
+        let bytes = serde_json::to_vec(v).map_err(|e| KeyError::Malformed(e.to_string()))?;
+        vault::write_sealed(&self.dir.join("secrets.json"), &self.key, AAD_SECRETS, &bytes)
     }
 
     pub fn write_state(&self, v: &serde_json::Value) -> Result<()> {
@@ -384,6 +406,27 @@ mod tests {
         let mut s = DurableStore::open(&d, KEY).unwrap();
         assert!(s.ref_get(MAIN).is_some());
         assert_eq!(s.pending_take("missing").len(), 1);
+    }
+
+    #[test]
+    fn secrets_live_in_their_own_file_and_never_in_state() {
+        // The UI reads `state`. A project key in it would be one careless
+        // accessor away from crossing the IPC seam, so the separation is
+        // asserted rather than remembered.
+        let d = tmpdir("secrets");
+        let s = DurableStore::open(&d, KEY).unwrap();
+        s.write_state(&serde_json::json!({"projects": [{"id": "p1"}]})).unwrap();
+        s.write_secrets(&serde_json::json!({"p1": {"key": "aa", "salt": "bb"}}))
+            .unwrap();
+
+        let reopened = DurableStore::open(&d, KEY).unwrap();
+        let state = reopened.read_state().unwrap().unwrap();
+        assert!(
+            state.get("secrets").is_none(),
+            "secrets leaked into the state document"
+        );
+        assert!(reopened.read_secrets().unwrap().is_some());
+        assert!(d.join("secrets.json").exists());
     }
 
     #[test]

@@ -368,3 +368,180 @@ pub fn new_project_id() -> String {
         data_encoding::BASE32_NOPAD.encode(&b).to_lowercase()
     )
 }
+
+// ---------------------------------------------------------------------------
+// Project secrets, sync frames and invites.
+//
+// A project's metadata key and salt never cross the IPC seam (CLAUDE.md:
+// the UI never sees a project key or a salt), so they live in their own
+// sealed file and are reachable only from here.
+// ---------------------------------------------------------------------------
+
+use olb_keys::invite::{ContentKey, KeyScope};
+use zeroize::Zeroizing;
+
+/// A frame as it travels on a shared bucket topic.
+///
+/// `tag` is what lets a receiver skip another project's traffic without
+/// attempting to decrypt it. It is already a hash of the project id under a
+/// secret salt, so it identifies the conversation without naming the
+/// project to anyone who is not in it.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct Frame {
+    tag: String,
+    body: String,
+}
+
+impl App {
+    fn secrets(&self) -> Value {
+        self.store
+            .read_secrets()
+            .ok()
+            .flatten()
+            .unwrap_or_else(|| json!({}))
+    }
+
+    fn put_secret(&self, project_id: &str, key_hex: &str, salt_hex: &str) -> Result<(), String> {
+        let mut sec = self.secrets();
+        sec[project_id] = json!({"key": key_hex, "salt": salt_hex});
+        self.store.write_secrets(&sec).map_err(|e| e.to_string())
+    }
+
+    /// Mint a project's metadata key and salt. Called once, at creation.
+    pub fn create_project_secret(&self, project_id: &str) -> Result<(), String> {
+        use rand::RngCore;
+        let mut key = [0u8; 32];
+        let mut salt = [0u8; 32];
+        rand::rngs::OsRng.fill_bytes(&mut key);
+        rand::rngs::OsRng.fill_bytes(&mut salt);
+        self.put_secret(project_id, &hex::encode(key), &hex::encode(salt))
+    }
+
+    fn project_key(&self, project_id: &str) -> Option<ContentKey> {
+        let hexs = self.secrets().get(project_id)?.get("key")?.as_str()?.to_string();
+        let b = hex::decode(hexs).ok()?;
+        Some(Zeroizing::new(<[u8; 32]>::try_from(b.as_slice()).ok()?))
+    }
+
+    fn project_salt(&self, project_id: &str) -> Option<Vec<u8>> {
+        hex::decode(self.secrets().get(project_id)?.get("salt")?.as_str()?).ok()
+    }
+
+    /// The opaque conversation id for a project, as it appears on the wire.
+    pub fn project_tag(&self, project_id: &str) -> Option<String> {
+        let salt = self.project_salt(project_id)?;
+        Some(olb_vcs::anchor::project_tag(project_id, &salt))
+    }
+
+    /// Every project this node holds keys for, with its topic and tag.
+    pub fn synced_projects(&self) -> Vec<(String, String, String)> {
+        self.secrets()
+            .as_object()
+            .map(|m| {
+                m.keys()
+                    .filter_map(|id| {
+                        let tag = self.project_tag(id)?;
+                        Some((id.clone(), tag, olb_vcs::sync::project_topic(id)))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Seal a sync message for a project's conversation.
+    ///
+    /// The bucket is shared with every other OLB project that hashes into
+    /// it, so a plaintext frame would hand them this project's commits.
+    pub fn seal_frame(
+        &self,
+        project_id: &str,
+        msg: &olb_vcs::sync::SyncMessage,
+    ) -> Result<Vec<u8>, String> {
+        let key = self
+            .project_key(project_id)
+            .ok_or_else(|| format!("no key for {project_id}"))?;
+        let tag = self
+            .project_tag(project_id)
+            .ok_or_else(|| format!("no salt for {project_id}"))?;
+        let plain = serde_json::to_vec(msg).map_err(|e| e.to_string())?;
+        let sealed = olb_keys::vault::seal(&key, SYNC_AAD, &plain).map_err(|e| e.to_string())?;
+        let frame = Frame {
+            tag,
+            body: data_encoding::BASE64.encode(&sealed),
+        };
+        serde_json::to_vec(&frame).map_err(|e| e.to_string())
+    }
+
+    /// Open a frame if it belongs to a project we hold a key for.
+    ///
+    /// Returns `None` for somebody else's traffic, which on a shared bucket
+    /// is most of it — that is an ordinary outcome, not an error.
+    pub fn open_frame(&self, bytes: &[u8]) -> Option<(String, olb_vcs::sync::SyncMessage)> {
+        let frame: Frame = serde_json::from_slice(bytes).ok()?;
+        let project_id = self
+            .synced_projects()
+            .into_iter()
+            .find(|(_, tag, _)| *tag == frame.tag)
+            .map(|(id, _, _)| id)?;
+        let key = self.project_key(&project_id)?;
+        let sealed = data_encoding::BASE64.decode(frame.body.as_bytes()).ok()?;
+        let plain = olb_keys::vault::open(&key, SYNC_AAD, &sealed).ok()?;
+        Some((project_id, serde_json::from_slice(&plain).ok()?))
+    }
+
+    /// This project's branch heads, as advertised to peers.
+    pub fn heads(&self, project_id: &str) -> Vec<(String, String)> {
+        let prefix = format!("refs/projects/{project_id}/heads/");
+        self.store
+            .refs()
+            .into_iter()
+            .filter_map(|(name, t)| match t {
+                RefTarget::Branch { commit } => {
+                    Some((name.strip_prefix(&prefix)?.to_string(), commit))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    pub fn heads_message(&self, project_id: &str) -> olb_vcs::sync::SyncMessage {
+        olb_vcs::sync::SyncMessage::Heads {
+            project: project_id.to_string(),
+            heads: self.heads(project_id),
+            anchor: None,
+        }
+    }
+
+    /// Commits a peer asked for, packed to stay under the send budget.
+    pub fn commits_for(
+        &self,
+        project_id: &str,
+        ids: &[String],
+    ) -> Result<Vec<olb_vcs::sync::SyncMessage>, String> {
+        let envs: Vec<_> = ids.iter().filter_map(|id| self.store.commit(id)).collect();
+        olb_vcs::sync::pack(project_id, &envs).map_err(|e| e.to_string())
+    }
+
+    /// Apply commits a peer sent. Returns how many were newly applied.
+    ///
+    /// Every one goes through `dag::receive`, so a peer cannot push a commit
+    /// past the checks our own commits face.
+    pub fn apply_incoming(&mut self, commits: &[olb_vcs::types::CommitEnvelope]) -> usize {
+        let mut applied = 0;
+        for env in commits {
+            match olb_vcs::dag::receive(&mut self.store, &olb_vcs::dag::OpenPolicy, env) {
+                Ok(olb_vcs::dag::Received::Applied { also_applied }) => {
+                    applied += 1 + also_applied.len();
+                    let branch = main_ref(&env.header.project);
+                    let _ = olb_vcs::dag::set_branch(&mut self.store, &branch, &env.id, false);
+                }
+                Ok(_) => {}
+                Err(e) => eprintln!("[olb_core] dropped a peer commit: {e}"),
+            }
+        }
+        applied
+    }
+}
+
+/// AAD for a sealed sync frame.
+const SYNC_AAD: &str = "olb.sync.frame.v1";

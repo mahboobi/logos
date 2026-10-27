@@ -137,6 +137,8 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/generated/provider_gen.rs"));
 
 mod app;
 use app::App;
+// `has_commit` and friends live on the trait, not the concrete store.
+use olb_vcs::store::CommitStore as _;
 
 // ---------------------------------------------------------------------------
 // Record shapes. One place, so docs/08 R10 is a localised change.
@@ -193,51 +195,82 @@ static CIDS: Mutex<Vec<serde_json::Value>> = Mutex::new(Vec::new());
 /// Published so the bring-up thread can build a status snapshot without the impl.
 static IDENTITY_HEX: Mutex<String> = Mutex::new(String::new());
 
-struct OlbCore {
-    /// `None` while the store cannot be opened — a Keychain prompt the user
-    /// has not answered yet is an ordinary state, not a crash. Every method
-    /// that needs data reports the reason instead of panicking.
-    app: Option<App>,
-    locked: Option<String>,
+/// The open store, shared.
+///
+/// Behind a lock rather than owned by `OlbCore` because the Delivery
+/// listener runs on its own thread and has to apply incoming commits to the
+/// same store the UI methods write to. Two independently opened handles to
+/// the same files would append safely but their in-memory indexes and their
+/// `refs.json` writes would race.
+static APP: Mutex<Option<App>> = Mutex::new(None);
+/// Why the store is not open, when it is not.
+static LOCKED: Mutex<Option<String>> = Mutex::new(None);
+
+/// Borrowed access to the open store. Derefs to `App`, so call sites read
+/// the same as they did when the struct owned it.
+struct AppGuard(std::sync::MutexGuard<'static, Option<App>>);
+
+impl std::ops::Deref for AppGuard {
+    type Target = App;
+    fn deref(&self) -> &App {
+        self.0.as_ref().expect("an AppGuard is only built when Some")
+    }
 }
+impl std::ops::DerefMut for AppGuard {
+    fn deref_mut(&mut self) -> &mut App {
+        self.0.as_mut().expect("an AppGuard is only built when Some")
+    }
+}
+
+/// Lock the store, from any thread.
+fn app_guard() -> Result<AppGuard, String> {
+    // A poisoned lock means some earlier holder panicked. What it guards is
+    // still structurally sound — every mutation goes through a method that
+    // either completes or returns an error — so recovering beats bricking
+    // the module for the rest of the session.
+    let g = APP.lock().unwrap_or_else(|e| e.into_inner());
+    if g.is_some() {
+        Ok(AppGuard(g))
+    } else {
+        Err(LOCKED
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+            .unwrap_or_else(|| "the store is not open".into()))
+    }
+}
+
+struct OlbCore;
 
 impl Default for OlbCore {
     fn default() -> Self {
         let profile = std::env::var("LOGOS_PROFILE").unwrap_or_else(|_| "default".into());
         match App::open(&profile) {
-            Ok(app) => OlbCore { app: Some(app), locked: None },
+            Ok(app) => *APP.lock().unwrap_or_else(|e| e.into_inner()) = Some(app),
             Err(l) => {
                 eprintln!("[olb_core] store locked: {}", l.reason);
-                OlbCore { app: None, locked: Some(l.reason) }
+                *LOCKED.lock().unwrap_or_else(|e| e.into_inner()) = Some(l.reason);
             }
         }
+        OlbCore
     }
 }
 
 impl OlbCore {
-    fn app(&mut self) -> Result<&mut App, String> {
-        match self.app.as_mut() {
-            Some(a) => Ok(a),
-            None => Err(self
-                .locked
-                .clone()
-                .unwrap_or_else(|| "the store is not open".into())),
-        }
+    fn app(&mut self) -> Result<AppGuard, String> {
+        app_guard()
     }
 
     fn author_hex(&self) -> String {
-        self.app
-            .as_ref()
-            .map(|a| a.author_hex())
-            .unwrap_or_default()
+        app_guard().map(|a| a.author_hex()).unwrap_or_default()
     }
 
     /// The derived view the screens read. Empty rather than an error when
     /// the store is locked, so a screen renders its empty state instead of
     /// a stack trace.
     fn state_doc(&self) -> serde_json::Value {
-        self.app
-            .as_ref()
+        app_guard()
+            .ok()
             .map(|a| a.state.clone())
             .unwrap_or_else(|| serde_json::json!({
                 "v": 2,
@@ -249,7 +282,7 @@ impl OlbCore {
     }
 
     fn save_doc(&mut self, st: &serde_json::Value) -> Result<(), String> {
-        let app = self.app()?;
+        let mut app = self.app()?;
         app.state = st.clone();
         app.save_state()
     }
@@ -265,7 +298,7 @@ impl OlbCore {
         fields: serde_json::Value,
         message: &str,
     ) -> Result<String, String> {
-        let app = self.app()?;
+        let mut app = self.app()?;
         let rec = app.new_record(kind, project, fields)?;
         app.commit_record(&rec, olb_vcs::types::ChangeKind::Create, message)
     }
@@ -273,8 +306,8 @@ impl OlbCore {
     /// The project a new record belongs to: the selected one, else the most
     /// recent. Personal notes use the reserved id below.
     fn current_project(&self) -> String {
-        self.app
-            .as_ref()
+        app_guard()
+            .ok()
             .and_then(|a| a.state.get("current").and_then(|v| v.as_str()).map(String::from))
             .unwrap_or_default()
     }
@@ -611,14 +644,31 @@ impl OlbCoreModule for OlbCore {
             .as_array_mut()
             .map(|a| a.push(project.clone()));
         st["current"] = project["id"].clone();
+        let pid = project["id"].as_str().unwrap_or_default().to_string();
+        // The project's metadata key and salt, minted once. Without them
+        // there is no conversation to join and no frame to seal, so this
+        // has to happen before the first commit is advertised.
+        if let Ok(app) = self.app() {
+            if let Err(e) = app.create_project_secret(&pid) {
+                return record::err("internal", &e);
+            }
+        }
         if let Err(e) = self.commit_action(
             "project",
-            project["id"].as_str().unwrap_or_default(),
+            &pid,
             project.clone(),
             &format!("Create project: {title}"),
         ) {
             return record::err("internal", &e);
         }
+        // Subscribe to the bucket this project landed in, then advertise.
+        let topic = olb_vcs::sync::project_topic(&pid);
+        std::thread::spawn(move || {
+            retry_call("delivery subscribe new project", || {
+                modules().delivery_module.subscribe(&topic)
+            });
+            publish_heads(&pid);
+        });
         match self.save_doc(&st) {
             Ok(()) => {
                 announce_store(&st);
@@ -736,6 +786,8 @@ impl OlbCoreModule for OlbCore {
         ) {
             return record::err("internal", &e);
         }
+        let pid = project_id.clone();
+        std::thread::spawn(move || publish_heads(&pid));
         match self.save_doc(&st) {
             Ok(()) => {
                 announce_store(&st);
@@ -928,6 +980,119 @@ impl OlbCoreModule for OlbCore {
     }
 }
 
+/// Send a sealed frame on a project's bucket topic.
+fn send_frame(project_id: &str, msg: &olb_vcs::sync::SyncMessage) {
+    let Ok(app) = app_guard() else { return };
+    let topic = olb_vcs::sync::project_topic(project_id);
+    match app.seal_frame(project_id, msg) {
+        Ok(bytes) => {
+            if bytes.len() > SEND_BUDGET {
+                eprintln!(
+                    "[olb_core] refusing a {}-byte sync frame, over the {SEND_BUDGET} budget",
+                    bytes.len()
+                );
+                return;
+            }
+            drop(app);
+            if let Err(e) = modules().delivery_module.send(&topic, &bytes) {
+                eprintln!("[olb_core] sync send failed: {e:?}");
+            }
+        }
+        Err(e) => eprintln!("[olb_core] could not seal a sync frame: {e}"),
+    }
+}
+
+/// Tell peers where this node's branches are. Called after every local
+/// commit and once on connect.
+fn publish_heads(project_id: &str) {
+    let msg = match app_guard() {
+        Ok(app) => app.heads_message(project_id),
+        Err(_) => return,
+    };
+    send_frame(project_id, &msg);
+}
+
+/// Handle one decrypted frame.
+fn handle_sync(project_id: &str, msg: olb_vcs::sync::SyncMessage) {
+    use olb_vcs::sync::{react_to_heads, Reaction, SyncMessage};
+
+    match msg {
+        SyncMessage::Heads { .. } => {
+            let (ours, reaction) = {
+                let Ok(app) = app_guard() else { return };
+                let ours = app.heads(project_id);
+                let known = |id: &str| app.store.has_commit(id);
+                let r = react_to_heads(&ours, None, &msg, &known, olb_vcs::sync::MAX_WALK);
+                (ours, r)
+            };
+            match reaction {
+                Ok(Reaction::Want(ids)) => send_frame(
+                    project_id,
+                    &SyncMessage::Want {
+                        project: project_id.to_string(),
+                        ids,
+                    },
+                ),
+                Ok(Reaction::Offer(_)) => {
+                    // The peer is behind. Re-advertise rather than pushing:
+                    // they decide what they still need, and a push would
+                    // duplicate whatever another member already sent.
+                    let _ = ours;
+                    publish_heads(project_id);
+                }
+                Ok(Reaction::AnchorDivergence { ours, theirs }) => {
+                    // Not a transient error to retry past. A peer whose
+                    // anchor replaces rather than extends our history is
+                    // either broken or hostile, and syncing from it would
+                    // launder a rewritten history into this store.
+                    eprintln!(
+                        "[olb_core] REFUSING to sync {project_id}: the peer's anchor does not \
+                         extend ours (ours {ours}, theirs {theirs})"
+                    );
+                }
+                Ok(Reaction::NeedSnapshot) => {
+                    eprintln!("[olb_core] {project_id} is too far behind to catch up by walking; \
+                               a snapshot is needed (not implemented yet)");
+                }
+                Ok(Reaction::InSync) => {}
+                Err(e) => eprintln!("[olb_core] sync reaction failed: {e}"),
+            }
+        }
+
+        SyncMessage::Want { ids, .. } => {
+            let packed = match app_guard() {
+                Ok(app) => app.commits_for(project_id, &ids),
+                Err(_) => return,
+            };
+            match packed {
+                Ok(msgs) => {
+                    for m in &msgs {
+                        send_frame(project_id, m);
+                    }
+                }
+                Err(e) => eprintln!("[olb_core] could not pack commits: {e}"),
+            }
+        }
+
+        SyncMessage::Have { commits, .. } => {
+            let applied = match app_guard() {
+                Ok(mut app) => app.apply_incoming(&commits),
+                Err(_) => return,
+            };
+            if applied > 0 {
+                eprintln!("[olb_core] applied {applied} commit(s) from a peer");
+                let st = app_guard().map(|a| a.state.clone()).unwrap_or_default();
+                announce_store(&st);
+                announce_session();
+            }
+        }
+
+        SyncMessage::Snapshot { cid, .. } => {
+            eprintln!("[olb_core] a peer offered a snapshot at {cid}; not implemented yet");
+        }
+    }
+}
+
 /// Retry a dependency call until the per-caller token handshake has settled.
 fn retry_call<T>(
     label: &str,
@@ -976,6 +1141,30 @@ fn bring_up(persistence_path: &str) {
                             retry_call("delivery subscribe", || {
                                 modules().delivery_module.subscribe(RECORD_TOPIC)
                             });
+                            // One topic per bucket, shared with whatever
+                            // other projects hash into it; frames are
+                            // sealed, so the others are noise we skip.
+                            let topics: Vec<String> = app_guard()
+                                .map(|a| {
+                                    a.synced_projects()
+                                        .into_iter()
+                                        .map(|(_, _, t)| t)
+                                        .collect()
+                                })
+                                .unwrap_or_default();
+                            for t in topics.iter().collect::<std::collections::BTreeSet<_>>() {
+                                retry_call("delivery subscribe project", || {
+                                    modules().delivery_module.subscribe(t)
+                                });
+                            }
+                            let projects: Vec<String> = app_guard()
+                                .map(|a| {
+                                    a.synced_projects().into_iter().map(|(id, _, _)| id).collect()
+                                })
+                                .unwrap_or_default();
+                            for p in projects {
+                                publish_heads(&p);
+                            }
                         } else {
                             eprintln!("[olb_core] delivery node failed to start: {}", e.message);
                         }
@@ -994,6 +1183,13 @@ fn bring_up(persistence_path: &str) {
                         continue;
                     };
                     if msg.content_topic != RECORD_TOPIC {
+                        // A project sync frame, or another project's traffic
+                        // on the same bucket. open_frame returns None for
+                        // anything we hold no key for, which is most of it.
+                        let opened = app_guard().ok().and_then(|a| a.open_frame(&msg.payload));
+                        if let Some((project_id, sync_msg)) = opened {
+                            handle_sync(&project_id, sync_msg);
+                        }
                         continue;
                     }
                     // Store catch-up replays history and upstream suppresses
