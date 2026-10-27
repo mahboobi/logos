@@ -284,6 +284,8 @@ Rectangle {
 
             NewProject {
                 backend: root.backend
+                // Only reached once the core has confirmed, so the board we
+                // land on already has the project on it.
                 onCreated: root.screen = "Public Board"
                 onCancelled: root.screen = "Public Board"
             }

@@ -8,6 +8,30 @@ Item {
     id: screen
     property var backend: null
     signal created()
+
+    // Creating a project is an asynchronous call across the IPC seam, so
+    // the result arrives later than the click. Navigating immediately —
+    // which this screen used to do — meant a failure was never shown and a
+    // success looked instant whether or not anything happened.
+    property bool submitting: false
+    property string failure: ""
+
+    Connections {
+        target: screen.backend
+        enabled: screen.submitting
+        function onLastActionResultChanged() {
+            if (!screen.submitting) return;
+            screen.submitting = false;
+            var r = null;
+            try { r = JSON.parse(screen.backend.lastActionResult); } catch (e) {}
+            if (r && r.ok === false && r.error) {
+                screen.failure = r.error.message || "The project could not be created.";
+                return;
+            }
+            screen.failure = "";
+            screen.created();
+        }
+    }
     signal cancelled()
 
     // ---- form state ----
@@ -575,9 +599,21 @@ Item {
                             implicitHeight: Theme.touchTarget
                             onClicked: screen.cancelled()
                         }
+                        Text {
+                            visible: screen.failure !== ""
+                            text: screen.failure
+                            font.family: Theme.sans
+                            font.pixelSize: Theme.body
+                            color: Theme.amber
+                            wrapMode: Text.Wrap
+                            Layout.fillWidth: true
+                            Accessible.name: "Error: " + screen.failure
+                        }
+
                         PrimaryButton {
-                            text: "Create project"
+                            text: screen.submitting ? "Creating…" : "Create project"
                             enabled: titleField.text.trim().length > 0 && screen.backend
+                                     && !screen.submitting
                             onClicked: {
                                 var kw = keywordsField.text.split(",")
                                             .map(function (s) { return s.trim(); })
@@ -603,8 +639,13 @@ Item {
                                     references: screen.references,
                                     grant: grantField.text
                                 }));
-                                titleField.text = ""; summaryField.text = ""; descField.text = "";
-                                screen.created();
+                                // Do NOT clear the fields or navigate here.
+                                // The call is asynchronous; if it fails the
+                                // user needs what they typed still in front
+                                // of them, not an empty form on another
+                                // screen.
+                                screen.failure = "";
+                                screen.submitting = true;
                             }
                         }
                     }
