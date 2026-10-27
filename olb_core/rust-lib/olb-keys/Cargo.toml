@@ -19,6 +19,8 @@ rand = "0.8"
 # invents a construction — each is used the way its own documentation shows.
 sha2 = "0.10"
 hkdf = "0.12"
+# Argon2id for the passphrase KEK (docs/11 §1.4). RustCrypto, audited.
+argon2 = "0.5"
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 chacha20poly1305 = "0.10"
 # ML-KEM-768 for sealing an invite to a member's public key (docs/04 §2).

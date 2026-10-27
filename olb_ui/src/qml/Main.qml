@@ -29,6 +29,10 @@ Rectangle {
     readonly property var historyObj: parseJson(backend ? backend.history : "{}", ({}))
     readonly property var membersObj: parseJson(backend ? backend.members : "{}", ({}))
     // {id, fingerprint} — the olb1: string and the only part a human checks.
+    // The store is sealed until a passphrase opens it, so this gates the
+    // whole shell rather than appearing as one more screen in the nav.
+    readonly property var lockObj: parseJson(backend ? backend.lockState : "{}", ({}))
+    readonly property bool unlocked: (lockObj.state || "") === "unlocked"
     readonly property var myIdObj: parseJson(backend ? backend.myId : "{}", ({}))
     // Invites waiting on a decision. Never auto-accepted (docs/04 §9).
     readonly property var invitesArr: parseJson(backend ? backend.invites : "[]", [])
@@ -90,12 +94,28 @@ Rectangle {
     }
     Component.onCompleted: {
         root.ready = root.backend !== null && logos.isViewModuleReady("olb_ui");
-        if (root.ready) root.backend.refreshBoard();
+        if (root.ready) {
+            root.backend.refreshLockState();
+            root.backend.refreshBoard();
+        }
+    }
+
+    // The passphrase gate. Until the store opens there is nothing behind
+    // this to show, so it replaces the shell rather than overlaying it —
+    // a greyed-out nav would imply the data is there and merely disabled.
+    Unlock {
+        anchors.fill: parent
+        visible: !root.unlocked
+        lockState: root.lockObj
+        lastResult: root.backend ? root.backend.lastActionResult : ""
+        onCreatePassphrase: function (p) { if (root.backend) root.backend.createPassphrase(p); }
+        onUnlockStore: function (p) { if (root.backend) root.backend.unlockStore(p); }
     }
 
     RowLayout {
         anchors.fill: parent
         spacing: 0
+        visible: root.unlocked
 
         // ---- Left nav ----
         Rectangle {

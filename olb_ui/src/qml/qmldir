@@ -20,6 +20,7 @@ History 1.0 History.qml
 Members 1.0 Members.qml
 PrimaryButton 1.0 PrimaryButton.qml
 IconButton 1.0 IconButton.qml
+Unlock 1.0 Unlock.qml
 TextLink 1.0 TextLink.qml
 ChainButton 1.0 ChainButton.qml
 CheckRow 1.0 CheckRow.qml

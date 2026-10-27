@@ -12,6 +12,7 @@
 pub mod identity;
 pub mod invite;
 pub mod keyring;
+pub mod passphrase;
 pub mod store;
 pub mod vault;
 

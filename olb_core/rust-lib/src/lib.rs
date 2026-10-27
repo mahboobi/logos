@@ -112,6 +112,23 @@ pub trait OlbCoreModule: Send + 'static {
     /// One record by id, for S2. Fixture-backed until the record store lands.
     fn record(&mut self, record_id: String) -> String;
 
+    /// Whether the store needs a passphrase set, is locked, or is open.
+    /// Every data method returns a `locked` envelope until this says open.
+    fn lock_state(&mut self) -> String;
+
+    /// Set the passphrase for a store that has none yet, and open it.
+    fn create_passphrase(&mut self, passphrase: String) -> String;
+
+    /// Open a locked store.
+    fn unlock(&mut self, passphrase: String) -> String;
+
+    /// Rewrap the store key under a new passphrase. The key itself does not
+    /// change, so nothing already encrypted has to be rewritten.
+    /// `replacement`, not `new`: a trait parameter name is copied verbatim
+    /// into the generated C++ header, where `new` is a keyword and the
+    /// build fails with "invalid parameter name".
+    fn change_passphrase(&mut self, current: String, replacement: String) -> String;
+
     /// The `olb1:` string a user copies and hands to someone else
     /// (docs/04 §2.1). Public half only — the private keys never leave
     /// this module.
@@ -220,6 +237,9 @@ static IDENTITY_HEX: Mutex<String> = Mutex::new(String::new());
 static APP: Mutex<Option<App>> = Mutex::new(None);
 /// Why the store is not open, when it is not.
 static LOCKED: Mutex<Option<String>> = Mutex::new(None);
+/// The host-stamped persistence path, captured at context-ready so `unlock`
+/// can start the network later without a second context callback.
+static PERSISTENCE: Mutex<String> = Mutex::new(String::new());
 
 /// Borrowed access to the open store. Derefs to `App`, so call sites read
 /// the same as they did when the struct owned it.
@@ -257,14 +277,38 @@ fn app_guard() -> Result<AppGuard, String> {
 
 struct OlbCore;
 
+/// The profile this process serves.
+fn profile_name() -> String {
+    std::env::var("LOGOS_PROFILE").unwrap_or_else(|_| "default".into())
+}
+
+/// Open the store with a key and publish it, or record why not.
+fn open_with(profile: &str, key: &zeroize::Zeroizing<[u8; 32]>) -> Result<(), String> {
+    match App::open_with_key(profile, key) {
+        Ok(app) => {
+            *APP.lock().unwrap_or_else(|e| e.into_inner()) = Some(app);
+            *LOCKED.lock().unwrap_or_else(|e| e.into_inner()) = None;
+            Ok(())
+        }
+        Err(l) => {
+            *LOCKED.lock().unwrap_or_else(|e| e.into_inner()) = Some(l.reason.clone());
+            Err(l.reason)
+        }
+    }
+}
+
 impl Default for OlbCore {
     fn default() -> Self {
-        let profile = std::env::var("LOGOS_PROFILE").unwrap_or_else(|_| "default".into());
-        match App::open(&profile) {
-            Ok(app) => *APP.lock().unwrap_or_else(|e| e.into_inner()) = Some(app),
-            Err(l) => {
-                eprintln!("[olb_core] store locked: {}", l.reason);
-                *LOCKED.lock().unwrap_or_else(|e| e.into_inner()) = Some(l.reason);
+        // Nothing is opened here. The store is sealed behind a passphrase
+        // the user has not typed yet, so startup only establishes WHICH of
+        // the three states we are in. A dev/CI override is honoured so
+        // automated runs do not need a prompt.
+        let profile = profile_name();
+        if let Ok(Some(key)) = olb_keys::keyring::peek_key(&profile) {
+            if let Err(e) = open_with(&profile, &key) {
+                eprintln!("[olb_core] store locked: {e}");
+            } else {
+                eprintln!("[olb_core] store opened from OLB_STORE_KEY_HEX override");
             }
         }
         OlbCore
@@ -980,6 +1024,79 @@ impl OlbCoreModule for OlbCore {
         serde_json::Value::Array(cids.iter().rev().cloned().collect()).to_string()
     }
 
+    fn lock_state(&mut self) -> String {
+        let profile = profile_name();
+        let dir = olb_keys::store::default_dir(&profile);
+        let open = APP.lock().unwrap_or_else(|e| e.into_inner()).is_some();
+        let state = if open {
+            "unlocked"
+        } else if olb_keys::passphrase::exists(&dir) {
+            "locked"
+        } else {
+            "needs_setup"
+        };
+        serde_json::json!({
+            "state": state,
+            "profile": profile,
+            "minLength": olb_keys::passphrase::MIN_LEN,
+            "reason": LOCKED.lock().unwrap_or_else(|e| e.into_inner()).clone(),
+        })
+        .to_string()
+    }
+
+    fn create_passphrase(&mut self, passphrase: String) -> String {
+        let profile = profile_name();
+        let dir = olb_keys::store::default_dir(&profile);
+        let key = match olb_keys::passphrase::create(&dir, &passphrase) {
+            Ok(k) => k,
+            Err(e) => return record::err("refused", &e.to_string()),
+        };
+        match open_with(&profile, &key) {
+            Ok(()) => {
+                let st = self.state_doc();
+                announce_store(&st);
+                announce_session();
+                serde_json::json!({"ok": true, "state": "unlocked"}).to_string()
+            }
+            Err(e) => record::err("internal", &e),
+        }
+    }
+
+    fn unlock(&mut self, passphrase: String) -> String {
+        let profile = profile_name();
+        let dir = olb_keys::store::default_dir(&profile);
+        let key = match olb_keys::passphrase::unlock(&dir, &passphrase) {
+            Ok(k) => k,
+            // Deliberately the same shape for a wrong passphrase and a
+            // damaged vault: AEAD cannot tell them apart, and claiming to
+            // would be a guess presented as a fact.
+            Err(e) => return record::err("locked", &e.to_string()),
+        };
+        match open_with(&profile, &key) {
+            Ok(()) => {
+                let st = self.state_doc();
+                announce_store(&st);
+                announce_session();
+                // Bring delivery and storage up now: until this moment
+                // there was no identity to sign with and no store to put
+                // anything in.
+                std::thread::spawn(|| bring_up(&PERSISTENCE.lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone()));
+                serde_json::json!({"ok": true, "state": "unlocked"}).to_string()
+            }
+            Err(e) => record::err("internal", &e),
+        }
+    }
+
+    fn change_passphrase(&mut self, current: String, replacement: String) -> String {
+        let dir = olb_keys::store::default_dir(&profile_name());
+        match olb_keys::passphrase::change(&dir, &current, &replacement) {
+            Ok(()) => serde_json::json!({"ok": true}).to_string(),
+            Err(e) => record::err("refused", &e.to_string()),
+        }
+    }
+
     fn my_olb_id(&mut self) -> String {
         match self.app() {
             Ok(app) => serde_json::json!({
@@ -1078,9 +1195,21 @@ impl OlbCoreModule for OlbCore {
         // recognized (re-exchange failed)"}. The SDK's own single re-exchange
         // retry also fires too early to help. Bring-up runs off-thread with
         // backoff instead.
+        //
+        // Bring-up is also gated on the store being open. Before the user
+        // has typed their passphrase there is no identity to sign with and
+        // nowhere to put what arrives, so starting the network would only
+        // collect messages we would have to drop. `unlock` starts it.
+        *PERSISTENCE.lock().unwrap_or_else(|e| e.into_inner()) =
+            ctx.instance_persistence_path.clone();
         *IDENTITY_HEX.lock().unwrap() = self.author_hex();
-        let persistence = ctx.instance_persistence_path.clone();
-        std::thread::spawn(move || bring_up(&persistence));
+
+        if APP.lock().unwrap_or_else(|e| e.into_inner()).is_some() {
+            let persistence = ctx.instance_persistence_path.clone();
+            std::thread::spawn(move || bring_up(&persistence));
+        } else {
+            eprintln!("[olb_core] waiting for the store to be unlocked before starting the network");
+        }
     }
 }
 

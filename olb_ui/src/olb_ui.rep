@@ -22,6 +22,11 @@ class OlbUi
     SLOT(void saveProfile(QString name, QString orcid))
     SLOT(void openRecord(QString recordId))
 
+    // ---- Passphrase: the store is sealed until one is given ----
+    SLOT(void refreshLockState())
+    SLOT(void createPassphrase(QString passphrase))
+    SLOT(void unlockStore(QString passphrase))
+
     // ---- Phase 1c: identity and invites ----
     SLOT(void refreshIdentity())
     SLOT(void inviteMember(QString projectId, QString olbId, QString role))
@@ -51,6 +56,9 @@ class OlbUi
     // {id, fingerprint}: the olb1: string a user copies, and the only part
     // of it a human can meaningfully check. Public halves only — a private
     // key never crosses this seam.
+    // {state: needs_setup|locked|unlocked, minLength, reason}. Every data
+    // PROP below is empty until this reads unlocked.
+    PROP(QString lockState="{}" READONLY)
     PROP(QString myId="{}" READONLY)
     // Invites waiting on a decision. The sealed envelope is deliberately
     // NOT here; verification is not acceptance, so the UI shows who sent it

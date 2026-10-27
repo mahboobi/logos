@@ -25,6 +25,9 @@ public:
     void fetchFile(QString cid, QString absDest) override;
     void refreshBoard() override;
     void refreshIdentity() override;
+    void refreshLockState() override;
+    void createPassphrase(QString passphrase) override;
+    void unlockStore(QString passphrase) override;
     void inviteMember(QString projectId, QString olbId, QString role) override;
     void acceptInvite(QString inviteId) override;
     void createProject(QString specJson) override;

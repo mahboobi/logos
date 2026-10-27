@@ -82,13 +82,14 @@ impl App {
     /// The first call on a machine makes macOS prompt for Keychain access.
     /// That prompt is the cost of the key not living beside the data; until
     /// it is answered this returns `Locked` and the UI says so.
-    pub fn open(profile: &str) -> Result<App, Locked> {
-        let key = olb_keys::keyring::store_key(profile).map_err(|e| Locked {
-            reason: format!("the store key is not available: {e}"),
-        })?;
-
+    /// Open with a store key the caller has already unwrapped.
+    ///
+    /// The key arrives from `passphrase::unlock`, so this is only reachable
+    /// once the user has actually typed something that opens the store —
+    /// there is no path here that invents a key.
+    pub fn open_with_key(profile: &str, key: &zeroize::Zeroizing<[u8; 32]>) -> Result<App, Locked> {
         let dir = olb_keys::store::default_dir(profile);
-        let store = DurableStore::open(&dir, *key).map_err(|e| Locked {
+        let store = DurableStore::open(&dir, **key).map_err(|e| Locked {
             reason: format!("the store could not be opened: {e}"),
         })?;
 
@@ -136,7 +137,7 @@ impl App {
         // Migrates a Phase 0 plaintext identity.key by ADOPTING it, never by
         // generating a replacement: a node that changes its author key
         // orphans every commit it has ever signed.
-        let identity = olb_keys::identity::load_or_create(&dir, &key, name, orcid).map_err(|e| {
+        let identity = olb_keys::identity::load_or_create(&dir, key, name, orcid).map_err(|e| {
             Locked {
                 reason: format!("the identity could not be opened: {e}"),
             }

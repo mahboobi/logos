@@ -28,8 +28,29 @@ void OlbUiBackend::syncFromCore()
     setCids(modules().olb_core.stored_cids());
     setBoard(modules().olb_core.board());
     setFixtures(modules().olb_core.fixtures_enabled());
+    setLockState(modules().olb_core.lock_state());
     setMyId(modules().olb_core.my_olb_id());
     setInvites(modules().olb_core.invites());
+}
+
+void OlbUiBackend::refreshLockState()
+{
+    setLockState(modules().olb_core.lock_state());
+}
+
+void OlbUiBackend::createPassphrase(QString passphrase)
+{
+    setLastActionResult(modules().olb_core.create_passphrase(passphrase));
+    setLockState(modules().olb_core.lock_state());
+    refreshBoard();
+}
+
+void OlbUiBackend::unlockStore(QString passphrase)
+{
+    setLastActionResult(modules().olb_core.unlock(passphrase));
+    setLockState(modules().olb_core.lock_state());
+    // Unlocking is the moment everything becomes readable at once.
+    refreshBoard();
 }
 
 void OlbUiBackend::refreshIdentity()
