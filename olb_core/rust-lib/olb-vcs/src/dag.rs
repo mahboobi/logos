@@ -60,6 +60,9 @@ impl MemberPolicy for OpenPolicy {
 /// are sorted here. `changes` is sorted by object here. The author signs the
 /// preimage directly — ed25519 hashes internally, so there is no
 /// hash-then-sign ambiguity to worry about (docs/10 §1.4).
+///
+/// The argument list is the fixed contract; other workstreams call it.
+#[allow(clippy::too_many_arguments)]
 pub fn build_commit(
     signing: &ed25519_dalek::SigningKey,
     project: &str,

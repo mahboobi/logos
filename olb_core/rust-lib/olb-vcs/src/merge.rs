@@ -831,7 +831,7 @@ mod tests {
     use super::*;
     use crate::dag::tests::{build_on, commit_on, create, edit, key, pk, scene, set_field, forked, ProtectedMain};
     use crate::dag::{self, MemberPolicy, OpenPolicy, Received};
-    use crate::store::{MemStore, MAIN};
+    use crate::store::{CommitStore, MemStore};
     use crate::types::ChangeKind;
     use serde_json::json;
 
@@ -943,23 +943,19 @@ mod tests {
     fn test30_the_identical_edit_on_both_sides_is_not_a_conflict() {
         // Two separate scenes: one where the sides touch different fields,
         // one where they make the identical edit to the same field.
-        let (store, ours_head, theirs_head, _base, _ours, _theirs) = diverged(
-            |r| set_field(r, "statement", json!("Kinase X is required")),
-            |r| set_field(r, "notes", json!("same")),
-        );
-        // Same field, same value, through two different commits.
-        let (store2, ours2, theirs2, _b, _o, _t) = diverged(
+        // Both sides make the identical edit to the same field, through two
+        // different commits.
+        let (store, ours_head, theirs_head, _b, _o, _t) = diverged(
             |r| set_field(r, "statement", json!("agreed wording")),
             |r| set_field(r, "statement", json!("agreed wording")),
         );
-        match merge(&store2, &ours2, &theirs2, false).unwrap() {
+        match merge(&store, &ours_head, &theirs_head, false).unwrap() {
             MergeOutcome::Merged { records, .. } => assert!(
                 records.is_empty(),
                 "the two sides already hold the identical record"
             ),
             other => panic!("an identical edit is never a conflict: {other:?}"),
         }
-        let _ = (store, ours_head, theirs_head);
     }
 
     #[test]
@@ -981,9 +977,16 @@ mod tests {
         assert_eq!(c.theirs, Some(json!("Kinase X is sufficient")));
         assert!(!c.reason.is_empty());
 
-        // Nothing is applied until it is resolved: the outcome carries no
-        // records at all.
-        let _ = (ours, theirs);
+        // Nothing is applied until it is resolved, and the two sides still
+        // hold their own versions untouched.
+        assert_eq!(ours.version, 3);
+        assert_eq!(theirs.version, 3);
+        assert_ne!(
+            record::content_hash(&ours).unwrap(),
+            record::content_hash(&theirs).unwrap()
+        );
+        assert!(store.record(&record::content_hash(&ours).unwrap()).is_some());
+        assert!(store.record(&record::content_hash(&theirs).unwrap()).is_some());
     }
 
     #[test]
@@ -1032,7 +1035,6 @@ mod tests {
     #[test]
     fn test33_identical_content_through_different_commits_has_no_conflicts() {
         let (mut store, alice, root, h) = scene();
-        let _ = &h;
         let v2 = edit(&h, |r| set_field(r, "statement", json!("agreed")));
         // The same version 2 record, committed independently on two branches.
         let ours = commit_on(&mut store, &alice, &[&root], "ours", &[(v2.clone(), ChangeKind::Edit)]);
@@ -1112,31 +1114,44 @@ mod tests {
         assert!(conflicts[0].theirs.is_some());
     }
 
+    fn pred(label: &str, text: &str) -> serde_json::Value {
+        json!({"label": label, "text": text})
+    }
+
+    /// A three-way scene where the BASE already carries `predictions`, so the
+    /// keyed-array rule is exercised against a real base rather than against
+    /// an absent field.
+    fn with_predictions(
+        ours_preds: serde_json::Value,
+        theirs_preds: serde_json::Value,
+    ) -> (MemStore, String, String) {
+        let (mut store, alice, root, h) = scene();
+        let base = edit(&h, |r| {
+            set_field(r, "predictions", json!([pred("P1", "one"), pred("P2", "two")]));
+        });
+        let base_commit = commit_on(
+            &mut store,
+            &alice,
+            &[&root],
+            "Baseline predictions",
+            &[(base.clone(), ChangeKind::Edit)],
+        );
+        let ours = edit(&base, |r| set_field(r, "predictions", ours_preds));
+        let theirs = edit(&base, |r| set_field(r, "predictions", theirs_preds));
+        let o = commit_on(&mut store, &alice, &[&base_commit], "ours", &[(ours, ChangeKind::Edit)]);
+        let t = commit_on(&mut store, &alice, &[&base_commit], "theirs", &[(theirs, ChangeKind::Edit)]);
+        (store, o, t)
+    }
+
     #[test]
     fn test35_keyed_arrays_merge_element_wise() {
-        let pred = |label: &str, text: &str| json!({"label": label, "text": text});
-        let base_preds = json!([pred("P1", "one"), pred("P2", "two")]);
-
-        let (store, o, t, _b, _ours, _theirs) = diverged(
-            {
-                let base_preds = base_preds.clone();
-                move |r| {
-                    let mut p = base_preds.as_array().unwrap().clone();
-                    p.push(pred("P3", "three"));
-                    set_field(r, "predictions", json!(p));
-                }
-            },
-            {
-                let base_preds = base_preds.clone();
-                move |r| {
-                    let mut p = base_preds.as_array().unwrap().clone();
-                    p.push(pred("P4", "four"));
-                    set_field(r, "predictions", json!(p));
-                }
-            },
+        // Ours adds P3, theirs adds P4, both keeping P1 and P2. Note the
+        // input order: theirs lists P4 first, and the merged order is still
+        // canonical, so ordering is never itself a conflict.
+        let (store, o, t) = with_predictions(
+            json!([pred("P1", "one"), pred("P2", "two"), pred("P3", "three")]),
+            json!([pred("P4", "four"), pred("P1", "one"), pred("P2", "two")]),
         );
-        // The base version must already carry P1 and P2 for this to be a
-        // three-way test, so it is set up by hand here.
         let merged = match merge(&store, &o, &t, false).unwrap() {
             MergeOutcome::Merged { records, .. } => records,
             other => panic!("adding different elements must union: {other:?}"),
@@ -1149,20 +1164,34 @@ mod tests {
             .collect();
         assert_eq!(labels, vec!["P1", "P2", "P3", "P4"], "sorted by label");
 
-        // Both sides add P3 with different text: a conflict scoped to P3.
-        let (store, o, t, _b, _ours, _theirs) = diverged(
-            move |r| set_field(r, "predictions", json!([pred("P3", "melting at 42")])),
-            move |r| set_field(r, "predictions", json!([pred("P3", "melting at 51")])),
+        // Both sides add P3, with different text: one conflict, scoped to P3.
+        let (store, o, t) = with_predictions(
+            json!([pred("P1", "one"), pred("P2", "two"), pred("P3", "melting at 42")]),
+            json!([pred("P1", "one"), pred("P2", "two"), pred("P3", "melting at 51")]),
         );
         let conflicts = match merge(&store, &o, &t, false).unwrap() {
             MergeOutcome::Conflicted(c) => c,
             other => panic!("{other:?}"),
         };
         assert_eq!(conflicts.len(), 1, "{conflicts:?}");
-        assert_eq!(conflicts[0].path, "fields.predictions[P3].text");
-        assert!(
-            conflicts[0].path.contains("[P3]"),
+        assert_eq!(
+            conflicts[0].path, "fields.predictions[P3].text",
             "the conflict names the element, not the whole list"
+        );
+        assert_eq!(conflicts[0].base, None, "P3 did not exist at the base");
+
+        // One side edits P1 while the other edits P2: both edits survive.
+        let (store, o, t) = with_predictions(
+            json!([pred("P1", "one, rerun"), pred("P2", "two")]),
+            json!([pred("P1", "one"), pred("P2", "two, rerun")]),
+        );
+        let merged = match merge(&store, &o, &t, false).unwrap() {
+            MergeOutcome::Merged { records, .. } => records,
+            other => panic!("element-wise edits must merge: {other:?}"),
+        };
+        assert_eq!(
+            merged[0].fields["predictions"],
+            json!([pred("P1", "one, rerun"), pred("P2", "two, rerun")])
         );
     }
 
@@ -1202,7 +1231,7 @@ mod tests {
 
         // Nothing resolved at all.
         assert!(matches!(
-            apply_resolution(&conflicts, &[], &[ours.clone()], &[theirs.clone()]),
+            apply_resolution(&conflicts, &[], std::slice::from_ref(&ours), std::slice::from_ref(&theirs)),
             Err(VcsError::Refused(_))
         ));
         // Resolved at the wrong path.
@@ -1213,7 +1242,7 @@ mod tests {
             value: None,
         };
         assert!(matches!(
-            apply_resolution(&conflicts, &[wrong], &[ours.clone()], &[theirs.clone()]),
+            apply_resolution(&conflicts, &[wrong], std::slice::from_ref(&ours), std::slice::from_ref(&theirs)),
             Err(VcsError::Refused(_))
         ));
         // A custom resolution with no value.
@@ -1224,7 +1253,7 @@ mod tests {
             value: None,
         };
         assert!(matches!(
-            apply_resolution(&conflicts, &[empty], &[ours.clone()], &[theirs.clone()]),
+            apply_resolution(&conflicts, &[empty], std::slice::from_ref(&ours), std::slice::from_ref(&theirs)),
             Err(VcsError::Malformed(_))
         ));
 
@@ -1238,8 +1267,8 @@ mod tests {
         let records = apply_resolution(
             &conflicts,
             std::slice::from_ref(&resolution),
-            &[ours.clone()],
-            &[theirs.clone()],
+            std::slice::from_ref(&ours),
+            std::slice::from_ref(&theirs),
         )
         .unwrap();
         assert_eq!(records.len(), 1);
@@ -1301,11 +1330,11 @@ mod tests {
             value: None,
         };
         let records = apply_resolution_with_base(
-            &[base.clone()],
+            std::slice::from_ref(&base),
             &conflicts,
             std::slice::from_ref(&resolution),
-            &[ours.clone()],
-            &[theirs.clone()],
+            std::slice::from_ref(&ours),
+            std::slice::from_ref(&theirs),
         )
         .unwrap();
         assert_eq!(records.len(), 1);
@@ -1540,6 +1569,5 @@ mod tests {
             merge(&store, &root, &ahead, false).unwrap(),
             MergeOutcome::FastForward { to: ahead }
         );
-        let _ = MAIN;
     }
 }

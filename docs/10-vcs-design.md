@@ -240,7 +240,12 @@ object_id   = "olb:obj:" || base32_nopad_lower(record_hash of version 1)
 ```
 
 So an object's identity *is* the hash of its first version, exactly as docs/05
-§1 says. A useful consequence: two members cannot independently "create the
+§1 says.
+
+**As literally written this is circular**: a record carries its own `id`, and
+the `id` is in the hashed body. Resolved the only way it can be — hash the
+version-1 draft with an EMPTY `id`, then stamp the result in. Every later
+version carries the stamped id normally. A useful consequence: two members cannot independently "create the
 same object with different content" — different content gives a different hash
 gives a different `olb:obj:` id, so creation never conflicts.
 
@@ -310,8 +315,9 @@ the history is ever rewritten."
 ### 3.6 There is no delete
 
 Records are append-only, so "removed" in a diff summary means a new version
-with `flags.retracted = true`. A delete/edit conflict therefore reduces to an
-ordinary field conflict on `flags.retracted`.
+with `flags.retracted = true`. A delete/edit conflict is therefore a conflict
+on `flags.retracted` — but NOT as an ordinary one. See §4.2: the ordinary
+rules would resolve it cleanly, so retraction needs a named carve-out.
 
 ---
 
@@ -341,6 +347,21 @@ For each key in `union(keys(b), keys(o), keys(t))`:
 | `o == b` | take `t` |
 | `t == b` | take `o` |
 | all three differ | **conflict** — never auto-resolved |
+
+**One carve-out, for retraction.** If `flags.retracted` changed on exactly
+one side, that is a conflict even though the table above resolves it. Work
+it through: ours retracts, theirs edits an observation. `flags.retracted` is
+absent on theirs and at the base, so `t == b` takes ours; the observation is
+unchanged on ours, so `o == b` takes theirs. The merge is clean and produces
+a **retracted record carrying the other person's new observation**. One
+author believes the record is withdrawn, the other believes their edit
+landed, and nobody is told. §6.4 test 44 and §3.6 both require a conflict
+here, and the table as written does not deliver one — this is the spec
+contradicting itself, resolved in favour of the test.
+
+The carve-out only ever ADDS a conflict, so it cannot fabricate content. It
+also forces the human resolution to be consulted BEFORE the automatic rules,
+or the auto rule silently overrules the person who resolved it.
 
 docs/05 §3 is explicit: "never auto-merge conflicting fields." Specifics:
 
@@ -372,6 +393,15 @@ docs/05 §3 is explicit: "never auto-merge conflicting fields." Specifics:
 Resolution comes back as
 `[{ "object": ..., "field": ..., "choose": "ours|theirs|custom", "value": ... }]`
 covering **every** reported conflict; a partial resolution is rejected.
+
+**Applying a resolution needs the merge base.** A path where ours and theirs
+differ but which was not reported as a conflict is unattributable without
+it: it is either "ours never moved, take theirs" or "theirs never moved,
+take ours", and those produce different records. Guessing loses somebody's
+edit silently. `apply_resolution` is therefore the strict base-free form —
+it merges only the objects named in `conflicts` and errors if anything in
+them still differs — and `apply_resolution_with_base` is what the real flow
+calls.
 Applying it writes the merged record versions (`prev = [ours_hash,
 theirs_hash]`, `version = max(ours, theirs) + 1`) and then **one** merge commit
 with `parents = [target_head, source_head]`.
