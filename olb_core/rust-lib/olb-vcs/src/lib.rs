@@ -11,6 +11,7 @@
 //! Specification: `docs/10-vcs-design.md`. Where this crate and docs/05
 //! disagree, docs/10 §7 records which was chosen and why.
 
+pub mod anchor;
 pub mod canon;
 pub mod dag;
 pub mod hashing;
@@ -18,6 +19,7 @@ pub mod merge;
 pub mod merkle;
 pub mod record;
 pub mod store;
+pub mod sync;
 pub mod types;
 
 pub use types::{
