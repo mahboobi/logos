@@ -1197,29 +1197,78 @@ fn handle_sync(project_id: &str, msg: olb_vcs::sync::SyncMessage) {
     }
 }
 
-/// Retry a dependency call until the per-caller token handshake has settled.
+/// Retry a dependency call until it succeeds or the deadline passes.
+///
+/// Two different waits are folded into one budget here. The short one is the
+/// per-caller token handshake, which settles in well under a second. The
+/// long one is `delivery.start`, which on a cold start has been measured at
+/// **90 seconds** on this machine — the module logs
+/// `RET_STALE_WARN elapsedMs=90000` while libp2p discovers peers and RLN
+/// answers its membership check.
+///
+/// The previous version allowed 8 attempts with the backoff capped at 4 s,
+/// about 20 seconds in total. It only appeared to work because subscription
+/// happens from the `on_node_started` event rather than from this call's
+/// return — so a timeout here left the node coming up anyway, unobserved.
+/// A deadline states the real budget instead of encoding it as an attempt
+/// count that happens to be survivable.
+fn retry_until(
+    label: &str,
+    budget: std::time::Duration,
+    mut f: impl FnMut() -> Result<(), logos_rust_sdk::LogosError>,
+) -> bool {
+    let deadline = std::time::Instant::now() + budget;
+    let mut delay = std::time::Duration::from_millis(250);
+    let mut attempt = 0;
+    loop {
+        attempt += 1;
+        match f() {
+            Ok(()) => {
+                if attempt > 1 {
+                    eprintln!("[olb_core] {label} succeeded on attempt {attempt}");
+                }
+                return true;
+            }
+            Err(e) => {
+                if std::time::Instant::now() >= deadline {
+                    eprintln!(
+                        "[olb_core] {label} gave up after {attempt} attempts \
+                         ({:?} budget): {e:?}",
+                        budget
+                    );
+                    return false;
+                }
+                eprintln!("[olb_core] {label} attempt {attempt} failed: {e:?}");
+                std::thread::sleep(delay);
+                delay = (delay * 2).min(std::time::Duration::from_secs(8));
+            }
+        }
+    }
+}
+
+/// Short budget: a call that only has to outlast the token handshake.
+const HANDSHAKE_BUDGET: std::time::Duration = std::time::Duration::from_secs(30);
+/// Long budget: a call that has to outlast a cold network start.
+const STARTUP_BUDGET: std::time::Duration = std::time::Duration::from_secs(180);
+
+/// Retry a dependency call that returns a value.
 fn retry_call<T>(
     label: &str,
     mut f: impl FnMut() -> Result<T, logos_rust_sdk::LogosError>,
 ) -> Option<T> {
-    let mut delay = std::time::Duration::from_millis(250);
-    for attempt in 1..=8 {
-        match f() {
-            Ok(v) => {
-                if attempt > 1 {
-                    eprintln!("[olb_core] {label} succeeded on attempt {attempt}");
-                }
-                return Some(v);
-            }
-            Err(e) => {
-                eprintln!("[olb_core] {label} attempt {attempt} failed: {e:?}");
-                std::thread::sleep(delay);
-                delay = (delay * 2).min(std::time::Duration::from_secs(4));
-            }
+    let mut out = None;
+    let ok = retry_until(label, HANDSHAKE_BUDGET, || match f() {
+        Ok(v) => {
+            out = Some(v);
+            Ok(())
         }
+        Err(e) => Err(e),
+    });
+    if ok {
+        out
+    } else {
+        None
     }
-    eprintln!("[olb_core] {label} gave up after 8 attempts");
-    None
 }
 
 /// Bring up delivery and storage. Independent: a failure in one must not take
@@ -1230,7 +1279,9 @@ fn bring_up(persistence_path: &str) {
         modules().delivery_module.create_node(DELIVERY_CFG)
     })
     .is_some()
-        && retry_call("delivery start", || modules().delivery_module.start()).is_some();
+        && retry_until("delivery start", STARTUP_BUDGET, || {
+            modules().delivery_module.start().map(|_| ())
+        });
 
     if delivery_up {
         let mut m = modules();

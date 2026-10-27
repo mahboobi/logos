@@ -25,6 +25,20 @@ attr = "cli"
 flake = "github:logos-co/logos-delivery-module/1d995bda3128e13f21ed17e0f925f4c04d2bd117#lgx"
 role = "dependency"
 
+# delivery_module declares these two as OPTIONAL dependencies, and scaffold
+# skips optional deps with a note — so neither was installed. The cost is
+# not cosmetic: without RLN, delivery logs "sends and proof validation fail
+# until it does", which is exactly the publish path Phase 0 task 4 and the
+# two-profile test depend on. Revs are delivery_module's own locked inputs,
+# so they are the versions it was built against.
+[modules.liblogos_rln_module]
+flake = "git+https://github.com/logos-co/logos-rln-modules?dir=logos-rln-module&rev=a814e7feda974a16eaa5dd50667b8fd843177f0e#lgx"
+role = "dependency"
+
+[modules.libp2p_module]
+flake = "git+https://github.com/logos-co/logos-libp2p-module?rev=33e3c7a7c57f5c190781d0910a520742a4822e5f#lgx"
+role = "dependency"
+
 [modules.olb_core]
 flake = "path:./olb_core#lgx"
 role = "project"
