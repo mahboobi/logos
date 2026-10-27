@@ -4,6 +4,9 @@
 // metadata.json#dependencies — typed wrappers + typed event accessors.
 #include "logos_sdk.h"
 
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonParseError>
 #include <QUrl>
 
 // A native file dialog hands back a file:// URL; olb_core wants a plain
@@ -13,6 +16,26 @@ static QString toLocalPath(const QString &pathOrUrl)
     if (pathOrUrl.startsWith(QStringLiteral("file:")))
         return QUrl(pathOrUrl).toLocalFile();
     return pathOrUrl;
+}
+
+void OlbUiBackend::setLastActionResult(QString resultJson)
+{
+    QJsonParseError err{};
+    const QJsonDocument doc = QJsonDocument::fromJson(resultJson.toUtf8(), &err);
+
+    QJsonObject obj;
+    if (err.error == QJsonParseError::NoError && doc.isObject())
+        obj = doc.object();
+    else
+        // Not an object, so there is no envelope to extend. Keep the bytes
+        // verbatim under a known key rather than dropping a reply we cannot
+        // classify.
+        obj.insert(QStringLiteral("raw"), resultJson);
+
+    obj.insert(QStringLiteral("seq"), QJsonValue(qint64(++m_actionSeq)));
+
+    OlbUiSimpleSource::setLastActionResult(
+        QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact)));
 }
 
 void OlbUiBackend::syncFromCore()
@@ -40,17 +63,19 @@ void OlbUiBackend::refreshLockState()
 
 void OlbUiBackend::createPassphrase(QString passphrase)
 {
-    setLastActionResult(modules().olb_core.create_passphrase(passphrase));
+    const QString result = modules().olb_core.create_passphrase(passphrase);
     setLockState(modules().olb_core.lock_state());
     refreshBoard();
+    setLastActionResult(result);
 }
 
 void OlbUiBackend::unlockStore(QString passphrase)
 {
-    setLastActionResult(modules().olb_core.unlock(passphrase));
+    const QString result = modules().olb_core.unlock(passphrase);
     setLockState(modules().olb_core.lock_state());
     // Unlocking is the moment everything becomes readable at once.
     refreshBoard();
+    setLastActionResult(result);
 }
 
 void OlbUiBackend::refreshIdentity()
@@ -67,10 +92,11 @@ void OlbUiBackend::inviteMember(QString projectId, QString olbId, QString role)
 
 void OlbUiBackend::acceptInvite(QString inviteId)
 {
-    setLastActionResult(modules().olb_core.accept_invite(inviteId));
+    const QString result = modules().olb_core.accept_invite(inviteId);
     // Accepting installs a key and joins a project, so everything the
     // screens show can change at once.
     refreshBoard();
+    setLastActionResult(result);
 }
 
 void OlbUiBackend::refreshBoard()
@@ -92,32 +118,39 @@ void OlbUiBackend::openRecord(QString recordId)
 
 void OlbUiBackend::createProject(QString specJson)
 {
-    setLastActionResult(modules().olb_core.create_project(specJson));
+    // The result goes out last: the view navigates to the board the moment
+    // it sees a success, and it should arrive to fresh contents.
+    const QString result = modules().olb_core.create_project(specJson);
     refreshBoard();
+    setLastActionResult(result);
 }
 
 void OlbUiBackend::setCurrentProject(QString projectId)
 {
-    setLastActionResult(modules().olb_core.set_current_project(projectId));
+    const QString result = modules().olb_core.set_current_project(projectId);
     refreshBoard();
+    setLastActionResult(result);
 }
 
 void OlbUiBackend::createNote(QString title, QString body)
 {
-    setLastActionResult(modules().olb_core.create_note(title, body));
+    const QString result = modules().olb_core.create_note(title, body);
     refreshBoard();
+    setLastActionResult(result);
 }
 
 void OlbUiBackend::promoteNote(QString noteId, QString projectId, QString stage)
 {
-    setLastActionResult(modules().olb_core.promote_note(noteId, projectId, stage));
+    const QString result = modules().olb_core.promote_note(noteId, projectId, stage);
     refreshBoard();
+    setLastActionResult(result);
 }
 
 void OlbUiBackend::saveProfile(QString name, QString orcid)
 {
-    setLastActionResult(modules().olb_core.set_profile(name, orcid));
+    const QString result = modules().olb_core.set_profile(name, orcid);
     refreshBoard();
+    setLastActionResult(result);
 }
 
 void OlbUiBackend::refreshSessionStatus()

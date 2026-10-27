@@ -315,6 +315,31 @@ impl Default for OlbCore {
     }
 }
 
+/// Append `item` to the array at `st[key]`.
+///
+/// `Value::as_array_mut` returns `None` when the key is missing or holds
+/// something that is not an array, and `.map(...)` over that `None` throws the
+/// write away while the caller goes on to report success. A silent no-op on
+/// the primary write path is indistinguishable from a store that never saves
+/// anything, which is expensive to diagnose from the outside — so this fails
+/// loudly instead of quietly.
+fn push_into(
+    st: &mut serde_json::Value,
+    key: &str,
+    item: serde_json::Value,
+) -> Result<(), String> {
+    match st[key].as_array_mut() {
+        Some(a) => {
+            a.push(item);
+            Ok(())
+        }
+        None => Err(format!(
+            "the store's \"{key}\" field is not a list, so there is nowhere to record \
+             this. The state document has an unexpected shape and has been left alone."
+        )),
+    }
+}
+
 impl OlbCore {
     fn app(&mut self) -> Result<AppGuard, String> {
         app_guard()
@@ -699,9 +724,9 @@ impl OlbCoreModule for OlbCore {
             "author": self.author_hex(),
             "ideas": [],
         });
-        st["projects"]
-            .as_array_mut()
-            .map(|a| a.push(project.clone()));
+        if let Err(e) = push_into(&mut st, "projects", project.clone()) {
+            return record::err("internal", &e);
+        }
         st["current"] = project["id"].clone();
         let pid = project["id"].as_str().unwrap_or_default().to_string();
         // The project's metadata key and salt, minted once. Without them
@@ -750,7 +775,9 @@ impl OlbCoreModule for OlbCore {
             "author": self.author_hex(),
             "promoted": serde_json::Value::Null,
         });
-        st["notes"].as_array_mut().map(|a| a.push(note.clone()));
+        if let Err(e) = push_into(&mut st, "notes", note.clone()) {
+            return record::err("internal", &e);
+        }
         let note_title = note["title"].as_str().unwrap_or_default().to_string();
         if let Err(e) = self.commit_action(
             "entry",
@@ -817,8 +844,12 @@ impl OlbCoreModule for OlbCore {
         if let Some(projects) = st["projects"].as_array_mut() {
             for p in projects.iter_mut() {
                 if p.get("id").and_then(|i| i.as_str()) == Some(&project_id) {
-                    p["ideas"].as_array_mut().map(|a| a.push(idea.clone()));
-                    attached = true;
+                    // Finding the project is not the same as recording the
+                    // idea on it; only the push itself counts as attached.
+                    if let Some(a) = p["ideas"].as_array_mut() {
+                        a.push(idea.clone());
+                        attached = true;
+                    }
                     break;
                 }
             }

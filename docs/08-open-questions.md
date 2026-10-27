@@ -268,6 +268,43 @@ attacker reads the science regardless. "Private project" is currently a claim
 about the network, not about the disk. Encrypting the store is a separate,
 larger change that was considered and deferred at the same time.
 
+### R20 — Scaffold does not resolve a dependency's own dependencies (found 27 Oct 2026)
+
+`liblogos_rln_module` was captured in `scaffold.toml`, built, and installed into
+both profiles — and never loaded. Its own `manifest.json` declares
+
+```json
+"name": "liblogos_rln_module",
+"dependencies": ["liblogos_lez_rln_module"]
+```
+
+a **required** dependency that was not installed, so basecamp could not resolve
+the module and skipped it. Nothing in the install output said so.
+
+The cause is the scope of scaffold's dependency resolution: it walks the
+`dependencies` / `optional_dependencies` of **`role = "project"`** sources only.
+`liblogos_rln_module` is `role = "dependency"`, so its own requirements are
+never read and the "unresolved dependency" fast-fail never fires. The gap
+compounds the optional-dependency note recorded above `[modules.liblogos_rln_module]`:
+delivery lists RLN as *optional*, so scaffold skipped it silently; RLN lists
+lez-rln as *required*, so scaffold never looked.
+
+**Fix:** capture the transitive dependency explicitly, at the same rev as its
+sibling so the two are the versions that were built together:
+
+```toml
+[modules.liblogos_lez_rln_module]
+flake = "git+https://github.com/logos-co/logos-rln-modules?dir=logos-lez-rln-module&rev=a814e7feda974a16eaa5dd50667b8fd843177f0e#lgx"
+role = "dependency"
+```
+
+**Rule for this repo:** after installing any `role = "dependency"` module, read
+the installed `manifest.json`'s `dependencies` array and confirm every name
+appears in `[modules]`. A module that is installed is not necessarily a module
+that loads, and basecamp does not report the difference. `lgs basecamp doctor`
+does not catch this either — it checks drift between `[modules]` and on-disk
+profile state, not whether each installed manifest's requirements are met.
+
 ### R19 — This machine has no login keychain (found 27 Oct 2026, BLOCKS the chosen store design)
 
 The store-at-rest decision taken on 26 Oct was "macOS Keychain". It cannot
