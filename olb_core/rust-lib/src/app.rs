@@ -46,6 +46,26 @@ pub struct Locked {
     pub reason: String,
 }
 
+/// Read a Phase 0 `store.json` and carry its contents into the new shape.
+///
+/// Only the parts that are still meaningful: projects, notes, profile and
+/// the current selection. Its `commits` array is deliberately dropped — those
+/// entries were `{action, payload}` records with no parents, no tree and no
+/// verifiable signature, so importing them as commits would manufacture a
+/// history that never existed. The real commit log starts from the next
+/// action, and the original file is kept for anyone who wants to look.
+fn adopt_legacy_store(dir: &std::path::Path) -> Option<Value> {
+    let text = std::fs::read_to_string(dir.join("store.json")).ok()?;
+    let old: Value = serde_json::from_str(&text).ok()?;
+    let mut v = empty_state();
+    for key in ["projects", "notes", "profile", "current"] {
+        if let Some(found) = old.get(key) {
+            v[key] = found.clone();
+        }
+    }
+    Some(v)
+}
+
 fn empty_state() -> Value {
     json!({
         "v": 2,
@@ -72,11 +92,37 @@ impl App {
             reason: format!("the store could not be opened: {e}"),
         })?;
 
-        let state = store
-            .read_state()
-            .ok()
-            .flatten()
-            .unwrap_or_else(empty_state);
+        // Sealed state if we have it; otherwise adopt the Phase 0 plaintext
+        // store.json sitting in the same directory. Migrating the identity
+        // without the document it describes left a node with the right
+        // author key and none of its own projects — which looks exactly
+        // like data loss to the person holding it.
+        let state = match store.read_state().ok().flatten() {
+            Some(v) => v,
+            None => match adopt_legacy_store(&dir) {
+                Some(v) => {
+                    if let Err(e) = store.write_state(&v) {
+                        eprintln!("[olb_core] could not seal the migrated store: {e}");
+                    } else {
+                        // Keep the original. A migration that deletes its
+                        // own source leaves nothing to re-run or inspect if
+                        // the import turns out to be wrong.
+                        let from = dir.join("store.json");
+                        let to = dir.join("store.json.migrated");
+                        if let Err(e) = std::fs::rename(&from, &to) {
+                            eprintln!("[olb_core] could not set the legacy store aside: {e}");
+                        }
+                        eprintln!(
+                            "[olb_core] migrated {} project(s) and {} note(s) from store.json",
+                            v.get("projects").and_then(|x| x.as_array()).map_or(0, |a| a.len()),
+                            v.get("notes").and_then(|x| x.as_array()).map_or(0, |a| a.len()),
+                        );
+                    }
+                    v
+                }
+                None => empty_state(),
+            },
+        };
 
         let name = state
             .pointer("/profile/name")
