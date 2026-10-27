@@ -1,0 +1,36 @@
+[package]
+name = "olb-keys"
+version = "0.1.0"
+edition = "2021"
+
+# Inside `olb_core/` for the same reason as `olb-vcs`: `olb_core/flake.nix`
+# declares `src = ./.`, so nothing outside this directory reaches the nix
+# store. Standalone workspace so `cargo test` works here without the module
+# crate's SDK path dependency, which only exists inside the nix build.
+[workspace]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+hex = "0.4"
+data-encoding = "2"
+rand = "0.8"
+# Audited crates only (CLAUDE.md). No home-made primitives, and nothing here
+# invents a construction — each is used the way its own documentation shows.
+sha2 = "0.10"
+hkdf = "0.12"
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+chacha20poly1305 = "0.10"
+# ML-KEM-768 for sealing an invite to a member's public key (docs/04 §2).
+ml-kem = "0.2"
+zeroize = { version = "1", features = ["zeroize_derive"] }
+# CBOR for the OLB ID string (docs/04 §2.1). Pure Rust, no C dependency.
+ciborium = "0.2"
+
+olb-vcs = { path = "../olb-vcs" }
+
+# The store key lives in the login Keychain rather than beside the data it
+# protects, which is the whole point: a copied folder or a Time Machine
+# backup is then useless on its own.
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = "2"

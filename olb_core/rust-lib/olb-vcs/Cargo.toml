@@ -1,0 +1,22 @@
+[package]
+name = "olb-vcs"
+version = "0.1.0"
+edition = "2021"
+
+# Deliberately NOT a member of any workspace, and deliberately inside
+# `olb_core/`. `olb_core/flake.nix` declares `src = ./.`, so only the
+# `olb_core/` directory enters the nix store — a path dependency on
+# `../../crates/...` would not resolve under `nix build .#lgx` (docs/10 §0).
+# Keeping it here means the same code is both packaged by nix and testable
+# with a plain `cargo test`, which the module crate itself is not: `rust-lib`
+# depends on an SDK path that only exists inside the nix build.
+[workspace]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Audited crates only — CLAUDE.md engineering rules. No home-made primitives.
+sha2 = "0.10"
+ed25519-dalek = "2"
+hex = "0.4"
+data-encoding = "2"

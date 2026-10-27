@@ -4,8 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 # Standalone crate — the empty table keeps cargo from adopting any workspace it
-# finds in a parent directory.
+# finds in a parent directory. The nested pure crates are EXCLUDED rather than
+# made members: each stays its own workspace root so `cargo test` works inside
+# it without dragging in this crate, which cannot build outside the nix build.
 [workspace]
+exclude = ["olb-vcs", "olb-keys"]
 
 [lib]
 crate-type = ["staticlib"]
@@ -27,3 +30,18 @@ sha2 = "0.10"
 # Staged by the builder from the same logos-rust-sdk revision its code
 # generator comes from, so there is no generator/runtime skew to manage.
 logos-rust-sdk = { path = "../logos-rust-sdk-src" }
+
+# The pure crates, as SUBDIRECTORIES of this one.
+#
+# Not siblings under olb_core/: the module builder stages a filtered Rust
+# source tree containing only the crate named by `codegen.rust.crate`, so a
+# `../olb-vcs` path dependency resolves to a directory that is not in the
+# build sandbox and nix fails with "failed to load manifest". Verified by
+# trying it (docs/08 R8).
+#
+# Living here is also what makes them testable. This crate cannot be built
+# outside the nix build at all — the SDK path above is staged by the builder
+# and does not exist in a normal checkout — so anything needing `cargo test`
+# has to sit in a crate that does not depend on the SDK.
+olb-vcs = { path = "olb-vcs" }
+olb-keys = { path = "olb-keys" }
