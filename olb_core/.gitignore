@@ -2,5 +2,10 @@ result
 result-*
 lib/
 rust-lib/target/
+# The nested pure crates build here when `cargo test` runs. Without these
+# lines nix copies ~800 MB of build artefacts into the store on every
+# module build, which filled the disk once.
+rust-lib/olb-vcs/target/
+rust-lib/olb-keys/target/
 rust-lib/generated/
 logos-rust-sdk-src
