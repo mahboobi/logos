@@ -101,7 +101,11 @@ States in `invites.list()`: `sealed`, `sent` (handed to Delivery), `received` (i
 ## 5. Invite by one-time code
 
 ```
-Lead: create code  ── code = "OLB-" + base32(10 random bytes) grouped 4-4-4 (dash-separated)
+Lead: create code  ── code = "OLB-" + Crockford-base32(10 random bytes), grouped 4-4-4-4
+                      e.g. OLB-7Q4M-K2XD-93RB-FT5W. FOUR groups, not three:
+                      10 bytes is 80 bits and needs 16 base32 symbols. The
+                      three-group example this line used to carry was only 60
+                      bits, so any UI mock showing three groups is wrong.
       store {code_hash, role, idea_ids, expiry, uses_left}
       subscribe to /olb/1/join-<H(code)[0] mod 16>/proto
       share code out of band

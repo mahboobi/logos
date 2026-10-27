@@ -90,12 +90,34 @@ Three modes. Exactly one is a real protection.
 | Mode | KEK source | For |
 | --- | --- | --- |
 | `passphrase` | Argon2id over a user passphrase | **default** for any node holding content keys |
-| `device` | 32 B random, stored in the OS keyring, file holds only a key id | opt-in convenience, Phase 2 (§1.5) |
+| `device` | 32 B random, stored in the macOS login Keychain | **what is implemented today** — chosen 26 Oct 2026, see below |
 | `none` | `KEK = Expand("olb-unprotected-v1", 32)` — a constant, i.e. no secret | replica nodes and `OLB_DEV=1` only |
 
-**A passphrase is genuinely needed, and there is no way around it.** The
-alternatives all reduce to a secret sitting on the same disk as the thing it
-protects:
+**Implemented: `device` mode, by an explicit decision (26 Oct 2026).** This
+section called `device` an opt-in convenience that should never be the only
+protection. It currently IS the only protection, and that was chosen with the
+trade-off stated: the Keychain defends a stolen laptop, a copied
+`~/Library/Application Support/OpenLabbook`, and a Time Machine backup, and
+does NOT defend against malware running as the logged-in user. A passphrase
+would cover that last case and costs a prompt on every launch — twice per
+two-profile test cycle.
+
+Three consequences that must be honoured rather than quietly forgotten:
+
+1. **Settings must show key protection as not-passphrase, in amber.** The UI
+   may not imply a protection that is not there.
+2. The "one-shot read of the store directory" row in the table below is
+   defended only as far as the Keychain defends it.
+3. On a non-macOS build there is no backend, and `keyring` refuses rather
+   than falling back to a key file — a fallback would claim encryption while
+   shipping the key beside the ciphertext.
+
+Argon2id, recovery codes, `identity.unlock` / `changePassphrase` / `restore`
+and the KDF-floor re-seal remain unimplemented and remain the right thing to
+add before any of R13's three triggers fire (docs/08).
+
+**Why a passphrase is still the stronger answer.** The alternatives all
+reduce to a secret sitting on the same disk as the thing it protects:
 
 | Attacker | `passphrase` mode | `none` mode (and today's `identity.key`) |
 | --- | --- | --- |
@@ -315,7 +337,9 @@ stay that way by construction.
 ### 3.2 The short human code
 
 `code = "OLB-" + Crockford-base32(10 random bytes)` in groups of 4 —
-`OLB-7Q4M-K2XD-93RB`, 80 bits.
+`OLB-7Q4M-K2XD-93RB-FT5W`, 80 bits. **Four groups.** The worked example here
+previously showed three, which is 12 symbols and only 60 bits; 80 bits needs
+16 symbols. Implemented as four groups.
 
 Say what it is for, because the design copy is right and the instinct is wrong:
 **the code is a rendezvous token, not a key and not an authorization.** It
@@ -449,7 +473,11 @@ per-idea access control**: a Reviewer holding the project key could unwrap every
 idea key, so "Selected ideas" would be decoration. Correct hierarchy:
 
 - `project_key[epoch]` — 32 random bytes, protects project-level metadata
-  (title, stages, member list ciphertext, commit envelopes). Every member has it.
+  (title, stages, member list ciphertext, commit envelopes). Every member
+  **in a reading role** has it. **Replica nodes do not** — this line used to
+  say "every member", which contradicts docs/04 §8. Resolved toward §8: a
+  replica serves ciphertext and has no business reading the member list.
+  Implemented that way, and tested.
 - `idea_key[idea_id][epoch]` — 32 **independent** random bytes per idea.
   Not derived from and not wrapped by `project_key`. Sealed per member, per
   idea, to their ML-KEM key.
