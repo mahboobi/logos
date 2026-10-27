@@ -28,6 +28,15 @@ Rectangle {
     readonly property var sessionObj: parseJson(backend ? backend.coreStatus : "{}", ({}))
     readonly property var historyObj: parseJson(backend ? backend.history : "{}", ({}))
     readonly property var membersObj: parseJson(backend ? backend.members : "{}", ({}))
+    // {id, fingerprint} — the olb1: string and the only part a human checks.
+    readonly property var myIdObj: parseJson(backend ? backend.myId : "{}", ({}))
+    // Invites waiting on a decision. Never auto-accepted (docs/04 §9).
+    readonly property var invitesArr: parseJson(backend ? backend.invites : "[]", [])
+    // The project an invite would be sent into.
+    readonly property string currentProjectId: {
+        const b = parseJson(backend ? backend.board : "{}", ({}));
+        return b.projectId || "";
+    }
     readonly property var openedRecord: parseJson(backend ? backend.openedRecord : "{}", ({}))
     readonly property var inviteDemoObj: ({})
     property string historyFilterIdea: ""
@@ -263,6 +272,11 @@ Rectangle {
                 backend: root.backend
                 profile: root.profileObj
                 coreStatus: root.backend ? root.backend.coreStatus : ""
+                myId: root.myIdObj
+                invites: root.invitesArr
+                onAcceptInvite: function (inviteId) {
+                    if (root.backend) root.backend.acceptInvite(inviteId);
+                }
             }
 
             Entry {
@@ -288,8 +302,12 @@ Rectangle {
                 members: root.membersObj
                 inviteDemo: root.inviteDemoObj
                 onInviteRequested: function (olbId, role) {
-                    // TODO(phase1c): identity.invite(olbId, role) — docs/11
-                    console.log("[olb_ui] invite requested:", olbId, role);
+                    if (!root.backend) return;
+                    if (!root.currentProjectId) {
+                        console.log("[olb_ui] no project selected to invite into");
+                        return;
+                    }
+                    root.backend.inviteMember(root.currentProjectId, olbId, role);
                 }
                 onMemberRemoved: function (memberId) {
                     console.log("[olb_ui] member removed:", memberId);
