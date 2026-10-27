@@ -98,7 +98,24 @@ impl App {
         // without the document it describes left a node with the right
         // author key and none of its own projects — which looks exactly
         // like data loss to the person holding it.
-        let state = match store.read_state().ok().flatten() {
+        // NOT `.ok().flatten()`. That swallowed a decryption failure and
+        // turned "this key cannot read your state" into "there is no state
+        // yet" — which then re-imported the legacy store and silently
+        // discarded everything written since. A store that cannot be read
+        // must say so, not quietly roll back to an older snapshot.
+        let existing = match store.read_state() {
+            Ok(v) => v,
+            Err(e) => {
+                return Err(Locked {
+                    reason: format!(
+                        "the store exists but could not be read: {e}. This usually means a \
+                         different key than the one it was written with. Nothing has been \
+                         changed."
+                    ),
+                })
+            }
+        };
+        let state = match existing {
             Some(v) => v,
             None => match adopt_legacy_store(&dir) {
                 Some(v) => {
