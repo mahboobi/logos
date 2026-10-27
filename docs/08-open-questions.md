@@ -268,7 +268,62 @@ attacker reads the science regardless. "Private project" is currently a claim
 about the network, not about the disk. Encrypting the store is a separate,
 larger change that was considered and deferred at the same time.
 
-### R12 — LEZ anchoring end to end (RESOLVED 25 Oct 2026; re-verified per-project 26 Oct 2026)
+### R18 — A module-level wallet route EXISTS (found 27 Oct 2026; supersedes part of R12)
+
+docs/07 task 6 and R12 both record that "Basecamp 0.3.0 ships no wallet
+module, so there is no module-level route to the LEZ wallet." **That is no
+longer true.** The Basecamp catalogue publishes `lez_core` 0.5.1, a
+`type: core` module that ships `libwallet_ffi.dylib` and a real LIDL:
+
+```
+method send_generic_public_transaction(account_ids: [tstr],
+        signing_requirements: [bool], instruction: bstr,
+        program_id_hex: tstr, payer_account_id_hex: tstr,
+        shard_program_account_ids_hex: [tstr]) -> tstr
+method poll_transaction_status(tx_hash_hex: tstr) -> bool
+method send_program_deployment_transaction(...) -> tstr
+method create_account_public() / list_accounts() / get_balance(...)
+```
+
+`send_generic_public_transaction` takes a `program_id_hex` and an
+`instruction` blob, which is exactly the shape `olb_registry.anchor` needs.
+So `olb_core` could anchor directly instead of going through the host
+runner, and `poll_transaction_status` gives the inclusion receipt R12
+complained was missing — a tx_hash could finally be checked rather than
+assumed.
+
+**What blocks it is packaging, not architecture.** `lez_core` 0.5.1 ships
+variants `darwin-arm64`, `linux-amd64`, `linux-arm64` and NO
+`darwin-arm64-dev`. Scaffold's basecamp (`[repos.basecamp].attr = "app"`)
+is a dev build and loads `<host>-dev` variants only, so installing it into
+an `lgs basecamp launch` profile fails with:
+
+```
+Install failed: lez_core: Package does not contain variant for platform:
+darwin-arm64-dev (package provides: darwin-arm64, linux-amd64, linux-arm64)
+```
+
+It installs cleanly into the separate release app at
+`/Applications/LogosBasecamp.app`, whose data root is
+`~/Library/Application Support/Logos/LogosBasecamp/` — that is where a
+working copy already sits on this machine.
+
+Three ways out, none free:
+
+1. **Ask Logos to publish a `-dev` variant.** The right fix, and the only
+   one that keeps the two-profile dev loop intact. Nothing to build.
+2. **Move the whole stack to portable.** Our flakes already expose
+   `lgx-portable`, so OLB could be hand-loaded into the release app
+   alongside the wallet. Costs `lgs basecamp launch`, and with it the
+   scripted alice/bob isolation every acceptance test is written against.
+3. **Stay as we are.** Anchor from the host runner, which works today
+   (R12). Costs nothing and blocks nothing in Phase 1b or 1c.
+
+Taken: 3 for now, with 1 as the ask. Anchoring is not on the 1b/1c critical
+path, and trading away two-profile testing for an in-app wallet we do not
+yet call would be a bad exchange.
+
+### R12 — LEZ anchoring end to end (RESOLVED 25 Oct 2026; re-verified per-project 26 Oct 2026; its wallet-route claim superseded by R18)
 `lgs create --template lez-framework` ships `src/bin/run_lez_counter.rs` with
 `// TODO: submit transaction via wallet` in every subcommand: it parses
 arguments, loads the program ELF, prints a line and returns. Nothing reaches
