@@ -268,6 +268,47 @@ attacker reads the science regardless. "Private project" is currently a claim
 about the network, not about the disk. Encrypting the store is a separate,
 larger change that was considered and deferred at the same time.
 
+### R19 — This machine has no login keychain (found 27 Oct 2026, BLOCKS the chosen store design)
+
+The store-at-rest decision taken on 26 Oct was "macOS Keychain". It cannot
+work here as configured:
+
+```
+$ security list-keychains      ->  only /Library/Keychains/System.keychain
+$ security default-keychain    ->  A default keychain could not be found
+$ ls ~/Library/Keychains/login.keychain-db  ->  No such file or directory
+```
+
+There is no login keychain, so there is nowhere for a generic password to
+go. The app surfaces this as a system dialog: *"A keychain cannot be found
+to store 'alice'"*, offering Cancel or **Reset To Defaults** — and Reset
+rewrites the keychain search list for the whole user account, which is far
+out of proportion to installing one app. Cancel.
+
+This also explains two earlier symptoms that looked like our bugs: a read
+from a second binary failing, and a write appearing to succeed into no
+durable location.
+
+Three ways forward, and this is the user's call because it changes the
+posture they chose:
+
+1. **Create a login keychain.** Restores the design as decided. It is a
+   change to their account's security configuration, and a missing login
+   keychain is unusual enough that the reason for its absence matters
+   before recreating it.
+2. **Env-var keys for dev** (`OLB_STORE_KEY_HEX_<PROFILE>`, implemented).
+   Unblocks immediately and changes no system state. Encryption at rest is
+   then only as strong as a file on the same disk as the data — which is
+   the exact posture R13 warns about, acceptable only until one of its
+   triggers fires.
+3. **Passphrase mode**, which docs/11 §1.4 specifies as the default anyway
+   and which needs no keychain. The most robust answer and the one the
+   original design preferred; costs a prompt on every launch and an
+   Argon2id implementation that is currently unwritten.
+
+Nothing is chosen yet. Option 2 is implemented so work is not blocked while
+the decision is open.
+
 ### R18 — A module-level wallet route EXISTS (found 27 Oct 2026; supersedes part of R12)
 
 docs/07 task 6 and R12 both record that "Basecamp 0.3.0 ships no wallet

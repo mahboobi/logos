@@ -14,3 +14,8 @@ build/
 
 # LEZ workspace build output
 /target/
+
+# Dev store keys. These decrypt a profile's whole store, so they are never
+# committed — and losing the file makes that store unreadable, by design.
+# Only needed on a machine with no login keychain (docs/08 R19).
+.scaffold/dev-store-keys.env

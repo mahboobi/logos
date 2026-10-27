@@ -27,6 +27,26 @@ const SERVICE: &str = "OpenLabbook";
 /// leave real items behind on a developer's machine. 64 hex characters.
 const ENV_OVERRIDE: &str = "OLB_STORE_KEY_HEX";
 
+/// The override for one profile, preferring the per-profile spelling.
+///
+/// `OLB_STORE_KEY_HEX_ALICE` beats `OLB_STORE_KEY_HEX`, so two profiles run
+/// from one shell still get different keys. Sharing one would not mix their
+/// data — the directories are separate — but it would quietly destroy the
+/// property that bob cannot read alice's store, which is exactly what a
+/// two-profile privacy test is supposed to demonstrate.
+fn override_for(profile: &str) -> Option<String> {
+    let per_profile = format!(
+        "{ENV_OVERRIDE}_{}",
+        profile
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_uppercase() } else { '_' })
+            .collect::<String>()
+    );
+    std::env::var(per_profile)
+        .or_else(|_| std::env::var(ENV_OVERRIDE))
+        .ok()
+}
+
 /// A 32-byte symmetric key, wiped when dropped.
 ///
 /// `Zeroizing` is not security theatre here: the store key is long-lived and
@@ -38,7 +58,7 @@ pub type StoreKey = Zeroizing<[u8; 32]>;
 ///
 /// `profile` is the Keychain account, normally `$LOGOS_PROFILE`.
 pub fn store_key(profile: &str) -> Result<StoreKey> {
-    if let Ok(hex_key) = std::env::var(ENV_OVERRIDE) {
+    if let Some(hex_key) = override_for(profile) {
         let bytes = hex::decode(hex_key.trim())
             .map_err(|e| KeyError::Malformed(format!("{ENV_OVERRIDE} is not hex: {e}")))?;
         let arr: [u8; 32] = bytes.as_slice().try_into().map_err(|_| {
@@ -55,7 +75,7 @@ pub fn store_key(profile: &str) -> Result<StoreKey> {
 /// is right for the app and wrong for anything else: a diagnostic that
 /// mints a key overwrites the one an existing store is encrypted with.
 pub fn peek_key(profile: &str) -> Result<Option<StoreKey>> {
-    if let Ok(hex_key) = std::env::var(ENV_OVERRIDE) {
+    if let Some(hex_key) = override_for(profile) {
         let bytes = hex::decode(hex_key.trim())
             .map_err(|e| KeyError::Malformed(format!("{ENV_OVERRIDE} is not hex: {e}")))?;
         let arr: [u8; 32] = bytes.as_slice().try_into().map_err(|_| {
