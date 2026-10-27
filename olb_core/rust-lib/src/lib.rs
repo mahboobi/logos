@@ -112,6 +112,21 @@ pub trait OlbCoreModule: Send + 'static {
     /// One record by id, for S2. Fixture-backed until the record store lands.
     fn record(&mut self, record_id: String) -> String;
 
+    /// The `olb1:` string a user copies and hands to someone else
+    /// (docs/04 §2.1). Public half only — the private keys never leave
+    /// this module.
+    fn my_olb_id(&mut self) -> String;
+
+    /// Invite someone to a project by their Open Labbook ID. Seals this
+    /// project's metadata key to them and publishes it to their inbox.
+    fn invite_member(&mut self, project_id: String, olb_id: String, role: String) -> String;
+
+    /// Invites that have arrived and are waiting on a decision.
+    fn invites(&mut self) -> String;
+
+    /// Accept one. Installs the key and starts syncing the project.
+    fn accept_invite(&mut self, invite_id: String) -> String;
+
     /// Called once the module is wired to the host. `ctx` carries the
     /// host-stamped instance id and persistence path.
     fn on_context_ready(&mut self, _ctx: &RustModuleContext) {}
@@ -965,6 +980,95 @@ impl OlbCoreModule for OlbCore {
         serde_json::Value::Array(cids.iter().rev().cloned().collect()).to_string()
     }
 
+    fn my_olb_id(&mut self) -> String {
+        match self.app() {
+            Ok(app) => serde_json::json!({
+                "ok": true,
+                "id": app.my_olb_id(),
+                "fingerprint": app.my_fingerprint(),
+            })
+            .to_string(),
+            Err(e) => record::err("locked", &e),
+        }
+    }
+
+    fn invite_member(&mut self, project_id: String, olb_id: String, role: String) -> String {
+        let role = match role.to_ascii_lowercase().as_str() {
+            "lead" => olb_keys::invite::Role::Lead,
+            "reviewer" => olb_keys::invite::Role::Reviewer,
+            "replica" => olb_keys::invite::Role::Replica,
+            _ => olb_keys::invite::Role::Contributor,
+        };
+        let built = match self.app() {
+            Ok(app) => app.build_invite_for(&project_id, olb_id.trim(), role),
+            Err(e) => return record::err("locked", &e),
+        };
+        let (env, topic) = match built {
+            Ok(v) => v,
+            Err(e) => return record::err("invalid", &e),
+        };
+        let bytes = match serde_json::to_vec(&env) {
+            Ok(b) => b,
+            Err(e) => return record::err("internal", &e.to_string()),
+        };
+        if bytes.len() > SEND_BUDGET {
+            return record::err("invalid", "the invite is too large for one Delivery message");
+        }
+        match modules().delivery_module.send(&topic, &bytes) {
+            Ok(_) => serde_json::json!({
+                "ok": true,
+                "inviteId": env.invite_id,
+                "expiry": env.expiry,
+            })
+            .to_string(),
+            Err(e) => record::err("offline", &format!("could not send the invite: {e:?}")),
+        }
+    }
+
+    fn invites(&mut self) -> String {
+        let st = self.state_doc();
+        // The sealed envelope stays here. It carries a project key sealed to
+        // this node, and nothing sealed belongs on the other side of the IPC
+        // seam even when only this node can open it.
+        let rows: Vec<serde_json::Value> = st
+            .get("invites")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|mut i| {
+                if let Some(o) = i.as_object_mut() {
+                    o.remove("envelope");
+                }
+                i
+            })
+            .collect();
+        serde_json::Value::Array(rows).to_string()
+    }
+
+    fn accept_invite(&mut self, invite_id: String) -> String {
+        let joined = match self.app() {
+            Ok(mut app) => app.accept_invite_by_id(&invite_id),
+            Err(e) => return record::err("locked", &e),
+        };
+        match joined {
+            Ok(project_id) => {
+                let topic = olb_vcs::sync::project_topic(&project_id);
+                let p = project_id.clone();
+                std::thread::spawn(move || {
+                    retry_call("delivery subscribe joined project", || {
+                        modules().delivery_module.subscribe(&topic)
+                    });
+                    publish_heads(&p);
+                });
+                let st = self.state_doc();
+                announce_store(&st);
+                serde_json::json!({"ok": true, "projectId": project_id}).to_string()
+            }
+            Err(e) => record::err("invalid", &e),
+        }
+    }
+
     fn on_context_ready(&mut self, ctx: &RustModuleContext) {
         // Do NOT call dependencies synchronously here. onContextReady fires a
         // few hundred milliseconds BEFORE the per-caller token handshake
@@ -1157,6 +1261,13 @@ fn bring_up(persistence_path: &str) {
                                     modules().delivery_module.subscribe(t)
                                 });
                             }
+                            if let Ok(a) = app_guard() {
+                                let inbox = a.my_inbox_topic();
+                                drop(a);
+                                retry_call("delivery subscribe inbox", || {
+                                    modules().delivery_module.subscribe(&inbox)
+                                });
+                            }
                             let projects: Vec<String> = app_guard()
                                 .map(|a| {
                                     a.synced_projects().into_iter().map(|(id, _, _)| id).collect()
@@ -1189,6 +1300,22 @@ fn bring_up(persistence_path: &str) {
                         let opened = app_guard().ok().and_then(|a| a.open_frame(&msg.payload));
                         if let Some((project_id, sync_msg)) = opened {
                             handle_sync(&project_id, sync_msg);
+                            continue;
+                        }
+                        // Not ours as a sync frame. It may be an invite on
+                        // our inbox bucket; most traffic there belongs to
+                        // other people, so a failure to parse is ordinary.
+                        if let Ok(env) = serde_json::from_slice::<olb_keys::invite::InviteEnvelope>(
+                            &msg.payload,
+                        ) {
+                            let recorded = app_guard()
+                                .ok()
+                                .map(|mut a| a.record_incoming_invite(&env));
+                            if let Some(Ok(())) = recorded {
+                                eprintln!("[olb_core] an invite arrived: {}", env.invite_id);
+                                let st = app_guard().map(|a| a.state.clone()).unwrap_or_default();
+                                announce_store(&st);
+                            }
                         }
                         continue;
                     }

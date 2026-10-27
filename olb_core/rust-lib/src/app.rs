@@ -401,20 +401,24 @@ impl App {
             .unwrap_or_else(|| json!({}))
     }
 
-    fn put_secret(&self, project_id: &str, key_hex: &str, salt_hex: &str) -> Result<(), String> {
+    fn put_secret(&self, project_id: &str, key_hex: &str) -> Result<(), String> {
         let mut sec = self.secrets();
-        sec[project_id] = json!({"key": key_hex, "salt": salt_hex});
+        sec[project_id] = json!({"key": key_hex});
         self.store.write_secrets(&sec).map_err(|e| e.to_string())
     }
 
-    /// Mint a project's metadata key and salt. Called once, at creation.
+    /// Mint a project's metadata key. Called once, at creation.
     pub fn create_project_secret(&self, project_id: &str) -> Result<(), String> {
         use rand::RngCore;
         let mut key = [0u8; 32];
-        let mut salt = [0u8; 32];
         rand::rngs::OsRng.fill_bytes(&mut key);
-        rand::rngs::OsRng.fill_bytes(&mut salt);
-        self.put_secret(project_id, &hex::encode(key), &hex::encode(salt))
+        self.put_secret(project_id, &hex::encode(key))
+    }
+
+    /// Record a key that arrived in an invite.
+    pub fn adopt_project_key(&self, project_id: &str, key: &ContentKey) -> Result<(), String> {
+        // Zeroizing derefs to the array; AsRef would be ambiguous here.
+        self.put_secret(project_id, &hex::encode(&**key))
     }
 
     fn project_key(&self, project_id: &str) -> Option<ContentKey> {
@@ -423,8 +427,15 @@ impl App {
         Some(Zeroizing::new(<[u8; 32]>::try_from(b.as_slice()).ok()?))
     }
 
+    /// The project's tag salt, DERIVED from its key rather than stored
+    /// beside it. One secret then travels in an invite instead of two, and
+    /// a member who holds the key can never be missing the salt.
     fn project_salt(&self, project_id: &str) -> Option<Vec<u8>> {
-        hex::decode(self.secrets().get(project_id)?.get("salt")?.as_str()?).ok()
+        let key = self.project_key(project_id)?;
+        let hk = hkdf::Hkdf::<sha2::Sha256>::new(None, key.as_ref());
+        let mut out = [0u8; 32];
+        hk.expand(b"olb.project.salt.v1", &mut out).ok()?;
+        Some(out.to_vec())
     }
 
     /// The opaque conversation id for a project, as it appears on the wire.
@@ -545,3 +556,185 @@ impl App {
 
 /// AAD for a sealed sync frame.
 const SYNC_AAD: &str = "olb.sync.frame.v1";
+
+// ---------------------------------------------------------------------------
+// Invites. What actually lets two nodes share a project.
+// ---------------------------------------------------------------------------
+
+impl App {
+    /// The `olb1:` string a user copies and hands to someone else.
+    pub fn my_olb_id(&self) -> String {
+        olb_keys::identity::encode_id(&self.identity.public).unwrap_or_default()
+    }
+
+    pub fn my_fingerprint(&self) -> String {
+        olb_keys::identity::fingerprint(&self.identity.public)
+    }
+
+    /// Where invites for this node arrive.
+    pub fn my_inbox_topic(&self) -> String {
+        olb_vcs::sync::inbox_topic(&self.identity.public.seal_pk)
+    }
+
+    /// Build an invite carrying this project's metadata key.
+    ///
+    /// The wire envelope deliberately carries an EMPTY `project_name`. The
+    /// invite bucket is shared with fifteen-sixteenths of everyone else, and
+    /// a readable project name on it tells strangers who is starting what.
+    /// The real name travels in the note, which is sealed to the invitee.
+    pub fn build_invite_for(
+        &self,
+        project_id: &str,
+        invitee_olb_id: &str,
+        role: olb_keys::invite::Role,
+    ) -> Result<(olb_keys::invite::InviteEnvelope, String), String> {
+        let invitee = olb_keys::identity::decode_id(invitee_olb_id)
+            .map_err(|e| format!("that is not a usable Open Labbook ID: {e}"))?;
+
+        let key = self
+            .project_key(project_id)
+            .ok_or_else(|| format!("no key for {project_id}"))?;
+
+        let name = self
+            .state
+            .get("projects")
+            .and_then(|v| v.as_array())
+            .and_then(|a| {
+                a.iter()
+                    .find(|p| p.get("id").and_then(|i| i.as_str()) == Some(project_id))
+            })
+            .and_then(|p| p.get("title"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        let note = json!({"projectName": name, "from": self.my_fingerprint()}).to_string();
+        let expiry = olb_keys::identity::now_unix() + 14 * 24 * 60 * 60;
+
+        let env = olb_keys::invite::build_invite(
+            &self.identity,
+            &invitee,
+            project_id,
+            "",
+            role,
+            &[],
+            &[(KeyScope::ProjectMeta, 1, key)],
+            &note,
+            expiry,
+        )
+        .map_err(|e| e.to_string())?;
+
+        let topic = olb_vcs::sync::inbox_topic(&invitee.seal_pk);
+        Ok((env, topic))
+    }
+
+    /// Hold an invite that arrived, for the user to look at.
+    ///
+    /// Verification is not acceptance (docs/04 §9). A signature proves who
+    /// sent it, never that the recipient wants it, so nothing is installed
+    /// here — the UI shows the inviter's fingerprint and waits.
+    pub fn record_incoming_invite(
+        &mut self,
+        env: &olb_keys::invite::InviteEnvelope,
+    ) -> Result<(), String> {
+        olb_keys::invite::verify_invite(env, olb_keys::identity::now_unix())
+            .map_err(|e| e.to_string())?;
+
+        let note = olb_keys::invite::open_note(&self.identity, env).unwrap_or_default();
+        let parsed: Value = serde_json::from_str(&note).unwrap_or_else(|_| json!({}));
+
+        let row = json!({
+            "inviteId": env.invite_id,
+            "projectId": env.project_id,
+            "projectName": parsed.get("projectName").and_then(|v| v.as_str()).unwrap_or(""),
+            "inviterFingerprint": parsed.get("from").and_then(|v| v.as_str()).unwrap_or(""),
+            "inviter": env.inviter,
+            "role": format!("{:?}", env.role),
+            "expiry": env.expiry,
+            "envelope": serde_json::to_string(env).unwrap_or_default(),
+        });
+
+        let list = self.state["invites"].as_array().cloned().unwrap_or_default();
+        if list
+            .iter()
+            .any(|i| i.get("inviteId").and_then(|v| v.as_str()) == Some(env.invite_id.as_str()))
+        {
+            return Ok(());
+        }
+        let mut list = list;
+        list.push(row);
+        self.state["invites"] = Value::Array(list);
+        self.save_state()
+    }
+
+    /// Accept an invite: unseal the key, keep it, and start syncing.
+    pub fn accept_invite_by_id(&mut self, invite_id: &str) -> Result<String, String> {
+        let raw = self
+            .state
+            .get("invites")
+            .and_then(|v| v.as_array())
+            .and_then(|a| {
+                a.iter()
+                    .find(|i| i.get("inviteId").and_then(|v| v.as_str()) == Some(invite_id))
+            })
+            .and_then(|i| i.get("envelope"))
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| format!("no invite {invite_id}"))?
+            .to_string();
+
+        let env: olb_keys::invite::InviteEnvelope =
+            serde_json::from_str(&raw).map_err(|e| e.to_string())?;
+
+        let keys = olb_keys::invite::accept_invite(&self.identity, &env)
+            .map_err(|e| e.to_string())?;
+
+        for (scope, _version, key) in &keys {
+            if matches!(scope, KeyScope::ProjectMeta) {
+                self.adopt_project_key(&env.project_id, key)?;
+            }
+        }
+
+        // The project exists for us now, even though we hold no records for
+        // it yet — those arrive over sync.
+        let mut projects = self.state["projects"].as_array().cloned().unwrap_or_default();
+        if !projects
+            .iter()
+            .any(|p| p.get("id").and_then(|v| v.as_str()) == Some(env.project_id.as_str()))
+        {
+            let name = self
+                .state
+                .get("invites")
+                .and_then(|v| v.as_array())
+                .and_then(|a| {
+                    a.iter()
+                        .find(|i| i.get("inviteId").and_then(|v| v.as_str()) == Some(invite_id))
+                })
+                .and_then(|i| i.get("projectName"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("Shared project")
+                .to_string();
+            projects.push(json!({
+                "id": env.project_id,
+                "title": name,
+                "privacy": "Invite-only",
+                "stages": ["Idea", "Hypothesis", "Funding", "Experiments", "Data", "Publish"],
+                "ideas": [],
+                "joined": true,
+            }));
+            self.state["projects"] = Value::Array(projects);
+            self.state["current"] = Value::String(env.project_id.clone());
+        }
+
+        // Drop it from the pending list; the key is what matters now.
+        if let Some(a) = self.state["invites"].as_array() {
+            let kept: Vec<Value> = a
+                .iter()
+                .filter(|i| i.get("inviteId").and_then(|v| v.as_str()) != Some(invite_id))
+                .cloned()
+                .collect();
+            self.state["invites"] = Value::Array(kept);
+        }
+        self.save_state()?;
+        Ok(env.project_id)
+    }
+}

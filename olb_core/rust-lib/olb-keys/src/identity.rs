@@ -575,7 +575,9 @@ pub(crate) fn decapsulation_key(bytes: &[u8]) -> Result<Dk> {
 /// 2026-01-01T00:00:00Z — docs/11 §2 step 5's floor on `created`.
 const EPOCH_2026: u64 = 1_767_225_600;
 
-pub(crate) fn now_unix() -> u64 {
+/// Seconds since the Unix epoch. Public because invite expiry is checked
+/// against this clock from outside the crate.
+pub fn now_unix() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())

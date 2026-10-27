@@ -28,6 +28,28 @@ void OlbUiBackend::syncFromCore()
     setCids(modules().olb_core.stored_cids());
     setBoard(modules().olb_core.board());
     setFixtures(modules().olb_core.fixtures_enabled());
+    setMyId(modules().olb_core.my_olb_id());
+    setInvites(modules().olb_core.invites());
+}
+
+void OlbUiBackend::refreshIdentity()
+{
+    setMyId(modules().olb_core.my_olb_id());
+    setIdentity(modules().olb_core.identity_fingerprint());
+    setInvites(modules().olb_core.invites());
+}
+
+void OlbUiBackend::inviteMember(QString projectId, QString olbId, QString role)
+{
+    setLastActionResult(modules().olb_core.invite_member(projectId, olbId, role));
+}
+
+void OlbUiBackend::acceptInvite(QString inviteId)
+{
+    setLastActionResult(modules().olb_core.accept_invite(inviteId));
+    // Accepting installs a key and joins a project, so everything the
+    // screens show can change at once.
+    refreshBoard();
 }
 
 void OlbUiBackend::refreshBoard()
@@ -39,6 +61,7 @@ void OlbUiBackend::refreshBoard()
     setProfile(modules().olb_core.profile());
     setHistory(modules().olb_core.history());
     setMembers(modules().olb_core.members());
+    setInvites(modules().olb_core.invites());
 }
 
 void OlbUiBackend::openRecord(QString recordId)

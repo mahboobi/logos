@@ -24,6 +24,9 @@ public:
     void uploadFile(QString absPath) override;
     void fetchFile(QString cid, QString absDest) override;
     void refreshBoard() override;
+    void refreshIdentity() override;
+    void inviteMember(QString projectId, QString olbId, QString role) override;
+    void acceptInvite(QString inviteId) override;
     void createProject(QString specJson) override;
     void setCurrentProject(QString projectId) override;
     void createNote(QString title, QString body) override;

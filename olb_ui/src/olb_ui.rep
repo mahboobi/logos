@@ -22,6 +22,11 @@ class OlbUi
     SLOT(void saveProfile(QString name, QString orcid))
     SLOT(void openRecord(QString recordId))
 
+    // ---- Phase 1c: identity and invites ----
+    SLOT(void refreshIdentity())
+    SLOT(void inviteMember(QString projectId, QString olbId, QString role))
+    SLOT(void acceptInvite(QString inviteId))
+
     // ---- Auto-synced to every QML replica via QtRO ----
     // The S1 project board (docs/03), as a JSON object.
     PROP(QString board="{}" READONLY)
@@ -43,6 +48,14 @@ class OlbUi
     PROP(QString records="[]" READONLY)
     // This node's ed25519 signing-key fingerprint.
     PROP(QString identity="" READONLY)
+    // {id, fingerprint}: the olb1: string a user copies, and the only part
+    // of it a human can meaningfully check. Public halves only — a private
+    // key never crosses this seam.
+    PROP(QString myId="{}" READONLY)
+    // Invites waiting on a decision. The sealed envelope is deliberately
+    // NOT here; verification is not acceptance, so the UI shows who sent it
+    // and waits (docs/04 §9).
+    PROP(QString invites="[]" READONLY)
     // JSON array of {cid, direction} this node has uploaded or fetched.
     PROP(QString cids="[]" READONLY)
     // Last storage outcome, as the module's own JSON result envelope.
