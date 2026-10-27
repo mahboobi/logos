@@ -48,6 +48,13 @@ Six of the original ten are answered from source (25 Oct 2026) and have moved to
 | D8 | Profile / "Copy my ID" screen | Simple panel from the nav status box, to be designed | Design |
 | D9 | Merge conflict resolution UI | Field-by-field view, to be designed in Phase 2 | Design |
 | D10 | Relationship to UR Chain / UBR | None in this codebase; contracts kept portable | Founders |
+| D11 | Basemap tiles for the Experiments maps: can `olb_core` fetch OSM tiles, or bundle offline vector tiles for the study area? | Placeholder background until decided; prefer offline for privacy | Engineering |
+| D12 | Field capture on phones — Basecamp is desktop only | Desktop flow (photo EXIF prefill) for now | Mahboob |
+| D13 | Species list source: GBIF needs network, project list is offline | Project list; GBIF optional later | Mahboob |
+| D14 | Media replication policy change for photo-heavy protocols | **Decided 27 Oct 2026: accept, as a per-project setting.** CLAUDE.md rule 3 amended | Mahboob |
+| D15 | Visitor spam: is testnet RLN enough? | Visitors off by default, behind a flag | Engineering |
+| D16 | Can a Reviewer-role member verify submissions? | No by default; project setting | Mahboob |
+| D17 | **Paid access to project data — unresolved, see below** | None; blocks `docs/12` §2.3 and §6 | Mahboob |
 
 ## Known design gaps (build a reasonable version, flag for review)
 
@@ -202,6 +209,41 @@ regenerated on every launch, so a node's identity (and therefore the author on
 every commit) changes between runs. Settings says so on screen. Durable
 identity needs the key sealed at rest, which is a key-management decision, not
 just a file write.
+
+### D17 — "Those who pay to access storage" (RAISED 27 Oct 2026, BLOCKING parts of docs/12)
+
+Stated in review of the data-collection handoff: *"Data is stored in Logos
+storage and accessible only to members of the project and those who pay to
+access storage."*
+
+That sentence does not fit the model the code and docs currently implement,
+and it cannot be built from a one-line description, so nothing has been
+written against it. Three readings, with different consequences:
+
+1. **Storage cost, not access control.** Someone pays a node to *host* bytes
+   they are already entitled to read. This changes nothing about who can
+   decrypt, and is close to what CLAUDE.md already says about Storage having
+   no paid persistence. Cheapest to build; probably not what was meant,
+   since it would not need saying.
+2. **Paid read access to project data.** A non-member pays and can then
+   decrypt project records. This is a product and a crypto change: it needs
+   a payment rail, and it needs content keys to reach someone who is not a
+   member, which the hybrid key model (docs/04 §6) deliberately does not
+   allow. It also collides with CLAUDE.md's "do not add a token" rule —
+   LEZ testnet tokens are the only permitted value, and nothing in the
+   current design gates decryption on payment.
+3. **Paid access to the public tier only.** The `public` half of a
+   submission (docs/12 §2.3) is served to payers; `restricted` stays
+   members-only. Narrower, but it contradicts the word *public* and would
+   remove the open-science story docs/12 §6 builds visitors on.
+
+**Why it blocks.** docs/12 §2.3 splits every submission into `public` and
+`restricted` and §6 lets visitors submit to Open projects. Reading 2 or 3
+would change what `public` means, who holds which key, and whether an Open
+project is open at all. Guessing would mean writing the privacy model twice.
+
+Not blocking: integration of Phase 1b/1c, and the Experiments screens on
+fixtures. Both proceed.
 
 ### R13 — Signing key is unsealed on disk (OPEN, deliberate — decided 26 Oct 2026)
 The ed25519 signing key is stored as raw bytes at mode 0600 in
