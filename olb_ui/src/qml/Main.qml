@@ -2,9 +2,9 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-// Shell: left nav + the active screen. docs/03 names the nav entries; only
-// Board is implemented so far, so the rest are visibly disabled rather than
-// pretending to work.
+// Shell: left nav + the active screen. docs/03 names the nav entries; the
+// ones not implemented yet stay visibly disabled rather than pretending to
+// work.
 Rectangle {
     id: root
     color: Theme.ground
@@ -40,9 +40,9 @@ Rectangle {
         { label: "New project",       done: true  },
         { label: "History",           done: true  },
         { label: "Members",           done: true  },
-        { label: "Hypotheses",        done: false },
-        { label: "Funding",           done: false },
-        { label: "Publish",           done: false },
+        { label: "Hypotheses",        done: true  },
+        { label: "Funding",           done: true  },
+        { label: "Publish",           done: true  },
         { label: "Settings",          done: true  },
         { label: "Diagnostics",       done: true  }
     ]
@@ -55,7 +55,10 @@ Rectangle {
         case "Notebook entry":    return 4;
         case "History":           return 5;
         case "Members":           return 6;
-        default:                  return 7;   // Diagnostics
+        case "Hypotheses":        return 7;
+        case "Funding":           return 8;
+        case "Publish":           return 9;
+        default:                  return 10;  // Diagnostics
         }
     }
 
@@ -293,6 +296,68 @@ Rectangle {
                 }
                 onKeyRotationRequested: {
                     console.log("[olb_ui] key rotation requested");
+                }
+            }
+
+            // S3, S4 and S5 render the fixture sections (Fixtures.qml, generated
+            // from fixtures/sample-project.json). The .rep carries no
+            // hypotheses, funding or publish PROP yet; when it does, these
+            // three bindings move to root.parseJson(backend.<prop>, ...) and
+            // the screens stay as they are.
+            Hypotheses {
+                hypothesesData: Fixtures.hypotheses.h1
+                onOpenBoard: root.screen = "Public Board"
+                onOpenRecord: function (recordId) { root.showRecord(recordId); }
+                onCommitRequested: function (hypothesisId, sealedCopyForReviewers) {
+                    // TODO(phase2): hypothesis.commit(hypothesisId, options) —
+                    // needs the olb_registry LEZ program (docs/07).
+                    console.log("[olb_ui] commit hypothesis:", hypothesisId,
+                                "sealed copy:", sealedCopyForReviewers);
+                }
+                onDraftSaveRequested: function (hypothesisId, plan) {
+                    // TODO(phase2): hypothesis.saveDraft(hypothesisId, planJson).
+                    console.log("[olb_ui] save hypothesis draft:", hypothesisId);
+                }
+                onPreviewRequested: function (hypothesisId, plan) {
+                    // TODO(phase2): hypothesis.previewCommitment(hypothesisId, planJson).
+                    console.log("[olb_ui] preview commitment:", hypothesisId);
+                }
+            }
+
+            Funding {
+                fundingData: Fixtures.funding["prop-lid"]
+                onOpenBoard: root.screen = "Public Board"
+                onOpenEvidence: function (milestoneId, recordId, label) {
+                    if (recordId !== "") root.showRecord(recordId);
+                    else console.log("[olb_ui] evidence has no record yet:", label);
+                }
+                onApproveRelease: function (milestoneId) {
+                    // TODO(phase3): funding.approve(milestoneId) — the release
+                    // happens on-chain in olb_funding, never locally.
+                    console.log("[olb_ui] approve release:", milestoneId);
+                }
+                onEvidenceRequested: function (milestoneId, note) {
+                    // TODO(phase3): funding.requestEvidence(milestoneId, note);
+                    // the note needs a prompt the canvas does not draw yet.
+                    console.log("[olb_ui] ask for more evidence:", milestoneId);
+                }
+                onContributeRequested: {
+                    // TODO(phase3): funding.contribute(amount, private).
+                    console.log("[olb_ui] contribute requested");
+                }
+                onOpenProposal: console.log("[olb_ui] view proposal")
+            }
+
+            Publish {
+                publishData: Fixtures.publish
+                onOpenBoard: root.screen = "Public Board"
+                onPublishRequested: function (options) {
+                    // TODO(phase4): publish.execute(options).
+                    console.log("[olb_ui] publish bundle:", JSON.stringify(options));
+                }
+                onPinRequested: function (revealId, cid) {
+                    // TODO(phase1b): files.pin(cid) — the .rep has no pin SLOT.
+                    console.log("[olb_ui] pin to replica:", revealId, cid);
                 }
             }
 

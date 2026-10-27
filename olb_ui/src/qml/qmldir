@@ -1,6 +1,7 @@
 module com.logos.module.olb_ui
 singleton Theme 1.0 Theme.qml
 singleton Icons 1.0 Icons.qml
+singleton Fixtures 1.0 Fixtures.qml
 Panel 1.0 Panel.qml
 Badge 1.0 Badge.qml
 StatusCard 1.0 StatusCard.qml
@@ -19,3 +20,11 @@ History 1.0 History.qml
 Members 1.0 Members.qml
 PrimaryButton 1.0 PrimaryButton.qml
 IconButton 1.0 IconButton.qml
+TextLink 1.0 TextLink.qml
+ChainButton 1.0 ChainButton.qml
+CheckRow 1.0 CheckRow.qml
+Stepper 1.0 Stepper.qml
+ProvenanceChain 1.0 ProvenanceChain.qml
+Hypotheses 1.0 Hypotheses.qml
+Funding 1.0 Funding.qml
+Publish 1.0 Publish.qml
