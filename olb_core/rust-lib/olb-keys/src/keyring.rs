@@ -49,6 +49,23 @@ pub fn store_key(profile: &str) -> Result<StoreKey> {
     platform::store_key(SERVICE, profile)
 }
 
+/// Read the key if it exists, and NEVER create one.
+///
+/// For tools that inspect a store. `store_key` creates on first use, which
+/// is right for the app and wrong for anything else: a diagnostic that
+/// mints a key overwrites the one an existing store is encrypted with.
+pub fn peek_key(profile: &str) -> Result<Option<StoreKey>> {
+    if let Ok(hex_key) = std::env::var(ENV_OVERRIDE) {
+        let bytes = hex::decode(hex_key.trim())
+            .map_err(|e| KeyError::Malformed(format!("{ENV_OVERRIDE} is not hex: {e}")))?;
+        let arr: [u8; 32] = bytes.as_slice().try_into().map_err(|_| {
+            KeyError::Malformed(format!("{ENV_OVERRIDE} must be 64 hex characters"))
+        })?;
+        return Ok(Some(Zeroizing::new(arr)));
+    }
+    platform::peek_key(SERVICE, profile)
+}
+
 /// Delete this profile's store key. Used by tests and by an explicit
 /// "forget this profile" action — never automatically, because without the
 /// key the store is permanently unreadable.
@@ -83,13 +100,54 @@ mod platform {
                 })?;
                 Ok(Zeroizing::new(arr))
             }
-            Err(_) => {
+            // ONLY "no such item" may mint a new key. Any other error —
+            // access denied, keychain locked, a transient failure — must
+            // fail loudly.
+            //
+            // This branch used to be `Err(_)`, and it destroyed a store. A
+            // different binary reading the item is denied rather than
+            // prompted in a non-interactive context; the catch-all treated
+            // that denial as "no key yet", minted a replacement and
+            // OVERWROTE the real one. The key that decrypts an existing
+            // store is then gone, the Keychain keeps no history, and every
+            // file it protected is unrecoverable. A wrong-length item was
+            // already refused for exactly this reason; a failed read is the
+            // same hazard and was not.
+            Err(e) if is_not_found(&e) => {
                 let mut key = Zeroizing::new([0u8; 32]);
                 rand::rngs::OsRng.fill_bytes(key.as_mut());
                 set_generic_password(service, account, key.as_ref())
                     .map_err(|e| KeyError::Keyring(format!("cannot store key: {e}")))?;
                 Ok(key)
             }
+            Err(e) => Err(KeyError::Keyring(format!(
+                "cannot read the store key for {service}/{account}: {e}. \
+                 Refusing to mint a replacement — doing so would overwrite the \
+                 key an existing store is encrypted with and lose every file it \
+                 protects."
+            ))),
+        }
+    }
+
+    /// `errSecItemNotFound`. The one error that means "nothing is stored
+    /// here yet" rather than "you may not have it".
+    fn is_not_found(e: &security_framework::base::Error) -> bool {
+        e.code() == -25300
+    }
+
+    pub fn peek_key(service: &str, account: &str) -> Result<Option<StoreKey>> {
+        match get_generic_password(service, account) {
+            Ok(bytes) => {
+                let arr: [u8; 32] = bytes.as_slice().try_into().map_err(|_| {
+                    KeyError::Keyring(format!(
+                        "keychain item {service}/{account} is {} bytes, expected 32",
+                        bytes.len()
+                    ))
+                })?;
+                Ok(Some(Zeroizing::new(arr)))
+            }
+            Err(e) if is_not_found(&e) => Ok(None),
+            Err(e) => Err(KeyError::Keyring(format!("cannot read {service}/{account}: {e}"))),
         }
     }
 
@@ -118,6 +176,10 @@ mod platform {
              explicitly, or add a Secret Service backend"
                 .into(),
         ))
+    }
+
+    pub fn peek_key(_service: &str, _account: &str) -> Result<Option<StoreKey>> {
+        Ok(None)
     }
 
     pub fn forget(_service: &str, _account: &str) -> Result<()> {
