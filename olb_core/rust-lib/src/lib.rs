@@ -18,6 +18,10 @@
 /// `/<app>/<version>/<name>/<encoding>`.
 const RECORD_TOPIC: &str = "/open-labbook/1/records/json";
 
+/// Domain tag for the Phase 0 test record. Separate from the commit and
+/// record tags so a test-record signature can never be replayed as either.
+const RECORD_DOMAIN: &[u8] = b"olb.testrecord.v1\0";
+
 /// Delivery node config. `mode: Core` is a relay node, `preset: logos.test` is
 /// the testnet; `entryLayer` defaults to `channels` (kernel + messaging +
 /// reliable channels). Verbatim from the delivery_module.lidl createNode docs.
@@ -131,6 +135,9 @@ pub trait OlbCoreModuleEvents {
 // `RustModuleContext`, `context()`, `modules()` and the `emit_*` emitters.
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/generated/provider_gen.rs"));
 
+mod app;
+use app::App;
+
 // ---------------------------------------------------------------------------
 // Record shapes. One place, so docs/08 R10 is a localised change.
 // ---------------------------------------------------------------------------
@@ -187,123 +194,96 @@ static CIDS: Mutex<Vec<serde_json::Value>> = Mutex::new(Vec::new());
 static IDENTITY_HEX: Mutex<String> = Mutex::new(String::new());
 
 struct OlbCore {
-    signing: ed25519_dalek::SigningKey,
+    /// `None` while the store cannot be opened — a Keychain prompt the user
+    /// has not answered yet is an ordinary state, not a crash. Every method
+    /// that needs data reports the reason instead of panicking.
+    app: Option<App>,
+    locked: Option<String>,
 }
 
 impl Default for OlbCore {
     fn default() -> Self {
-        OlbCore { signing: load_or_create_key() }
-    }
-}
-
-/// Load this node's signing key, generating it on first run.
-///
-/// The key lives beside the store, outside the tree `lgs basecamp launch`
-/// scrubs, so a node keeps one identity across relaunches. Without this every
-/// launch produced a new author and the commit log was incoherent between
-/// runs (docs/08 R6).
-///
-/// SECURITY, stated plainly: the key is written UNSEALED at mode 0600. Anyone
-/// who can read the file is this node. That is the same posture as an
-/// unencrypted ~/.ssh private key and is acceptable only for a testnet
-/// developer build. Sealing at rest is specified in docs/11-identity-design.md
-/// and supersedes this; the on-disk format is versioned so the migration is
-/// mechanical.
-fn load_or_create_key() -> ed25519_dalek::SigningKey {
-    use rand::RngCore;
-
-    let path = store::dir().join("identity.key");
-
-    if let Ok(bytes) = std::fs::read(&path) {
-        if bytes.len() == 32 {
-            let mut seed = [0u8; 32];
-            seed.copy_from_slice(&bytes);
-            return ed25519_dalek::SigningKey::from_bytes(&seed);
-        }
-        eprintln!(
-            "[olb_core] identity.key is {} bytes, expected 32 — refusing to use it \
-             and generating a new identity; move the old file aside to investigate",
-            bytes.len()
-        );
-    }
-
-    let mut seed = [0u8; 32];
-    rand::rngs::OsRng.fill_bytes(&mut seed);
-
-    if let Err(e) = std::fs::create_dir_all(store::dir()) {
-        eprintln!("[olb_core] cannot create key dir: {e}; identity will not persist");
-        return ed25519_dalek::SigningKey::from_bytes(&seed);
-    }
-    if let Err(e) = std::fs::write(&path, seed) {
-        eprintln!("[olb_core] cannot write identity key: {e}; identity will not persist");
-        return ed25519_dalek::SigningKey::from_bytes(&seed);
-    }
-    // Owner-only. Do this before anyone else can open it.
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        if let Err(e) = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)) {
-            eprintln!("[olb_core] cannot chmod 0600 the identity key: {e}");
+        let profile = std::env::var("LOGOS_PROFILE").unwrap_or_else(|_| "default".into());
+        match App::open(&profile) {
+            Ok(app) => OlbCore { app: Some(app), locked: None },
+            Err(l) => {
+                eprintln!("[olb_core] store locked: {}", l.reason);
+                OlbCore { app: None, locked: Some(l.reason) }
+            }
         }
     }
-    ed25519_dalek::SigningKey::from_bytes(&seed)
 }
 
 impl OlbCore {
-    /// Append a signed commit. CLAUDE.md: every user-visible action that
-    /// changes data produces one, and history is never rewritten.
-    fn commit(&mut self, st: &mut serde_json::Value, action: &str, payload: serde_json::Value) {
-        use ed25519_dalek::Signer;
-        let parent = st
-            .get("commits")
-            .and_then(|c| c.as_array())
-            .and_then(|a| a.last())
-            .and_then(|c| c.get("id"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-
-        let body = serde_json::json!({
-            // Inside the signature on purpose: a version field outside it is a
-            // downgrade lever (docs/10 §7).
-            "v": 1,
-            "action": action,
-            "payload": payload,
-            "parent": parent,
-            "at": now_ms(),
-            "author": self.author_hex(),
-        });
-        // Canonical bytes, domain-separated. Both the id and the signature
-        // cover the same preimage, so a signature cannot be lifted onto a
-        // different message type (docs/10 §1).
-        let canon_bytes = match canon::to_vec(&body) {
-            Ok(b) => b,
-            Err(e) => {
-                eprintln!("[olb_core] refusing to commit non-canonical body: {}", e.0);
-                return;
-            }
-        };
-        let mut preimage = Vec::with_capacity(COMMIT_DOMAIN.len() + canon_bytes.len());
-        preimage.extend_from_slice(COMMIT_DOMAIN);
-        preimage.extend_from_slice(&canon_bytes);
-
-        let sig = self.signing.sign(&preimage);
-        let id = hex::encode(<sha2::Sha256 as sha2::Digest>::digest(&preimage));
-
-        let entry = serde_json::json!({
-            "id": id,
-            "body": body,
-            "sig": hex::encode(sig.to_bytes()),
-        });
-        if let Some(a) = st["commits"].as_array_mut() {
-            a.push(entry);
+    fn app(&mut self) -> Result<&mut App, String> {
+        match self.app.as_mut() {
+            Some(a) => Ok(a),
+            None => Err(self
+                .locked
+                .clone()
+                .unwrap_or_else(|| "the store is not open".into())),
         }
     }
 
     fn author_hex(&self) -> String {
-        hex::encode(self.signing.verifying_key().to_bytes())
+        self.app
+            .as_ref()
+            .map(|a| a.author_hex())
+            .unwrap_or_default()
+    }
+
+    /// The derived view the screens read. Empty rather than an error when
+    /// the store is locked, so a screen renders its empty state instead of
+    /// a stack trace.
+    fn state_doc(&self) -> serde_json::Value {
+        self.app
+            .as_ref()
+            .map(|a| a.state.clone())
+            .unwrap_or_else(|| serde_json::json!({
+                "v": 2,
+                "profile": {"name": "", "orcid": ""},
+                "projects": [],
+                "notes": [],
+                "current": serde_json::Value::Null,
+            }))
+    }
+
+    fn save_doc(&mut self, st: &serde_json::Value) -> Result<(), String> {
+        let app = self.app()?;
+        app.state = st.clone();
+        app.save_state()
+    }
+
+    /// Write a record of `kind` on `project` and the signed commit that
+    /// introduces it. Replaces Phase 0's `{action, payload}` entries, which
+    /// were a log rather than a history: nothing could be verified, merged
+    /// or anchored from them.
+    fn commit_action(
+        &mut self,
+        kind: &str,
+        project: &str,
+        fields: serde_json::Value,
+        message: &str,
+    ) -> Result<String, String> {
+        let app = self.app()?;
+        let rec = app.new_record(kind, project, fields)?;
+        app.commit_record(&rec, olb_vcs::types::ChangeKind::Create, message)
+    }
+
+    /// The project a new record belongs to: the selected one, else the most
+    /// recent. Personal notes use the reserved id below.
+    fn current_project(&self) -> String {
+        self.app
+            .as_ref()
+            .and_then(|a| a.state.get("current").and_then(|v| v.as_str()).map(String::from))
+            .unwrap_or_default()
     }
 }
+
+/// Personal notes are not part of any project, but a commit header requires
+/// one. They get a reserved project id so their DAG stays separate from
+/// every real project's.
+const PERSONAL: &str = "olb:proj:personal";
 
 /// The fixture document, compiled in. Phase 1a builds every screen against
 /// fixtures/sample-project.json before wiring live data (CLAUDE.md UI rules).
@@ -317,63 +297,6 @@ fn fixtures_on() -> bool {
     matches!(std::env::var("OLB_FIXTURES").as_deref(), Ok("1"))
 }
 
-
-// ---------------------------------------------------------------------------
-// Durable store (docs/08 R6).
-//
-// `lgs basecamp launch` scrubs the whole profile tree on EVERY launch,
-// including module_data/, so instance_persistence_path() cannot hold anything
-// that must outlive a relaunch. The store therefore lives outside that tree,
-// keyed by LOGOS_PROFILE so alice and bob never share state.
-//
-// This is deliberately a plain JSON file, not SQLite: Phase 0 needs
-// durability and an auditable commit log, not query power. Phase 1b can
-// migrate the same shapes into SQLite without changing the module API.
-// ---------------------------------------------------------------------------
-mod store {
-    use serde_json::{json, Value};
-    use std::path::PathBuf;
-
-    pub fn dir() -> PathBuf {
-        let profile = std::env::var("LOGOS_PROFILE").unwrap_or_else(|_| "default".into());
-        let base = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-        // Outside .scaffold/basecamp/profiles/<p>/ on purpose — that tree is
-        // what launch deletes.
-        PathBuf::from(base)
-            .join("Library/Application Support/OpenLabbook")
-            .join(profile)
-    }
-
-    pub fn path() -> PathBuf {
-        dir().join("store.json")
-    }
-
-    pub fn load() -> Value {
-        match std::fs::read_to_string(path()) {
-            Ok(text) => serde_json::from_str(&text).unwrap_or_else(|_| empty()),
-            Err(_) => empty(),
-        }
-    }
-
-    pub fn save(v: &Value) -> Result<(), String> {
-        std::fs::create_dir_all(dir()).map_err(|e| e.to_string())?;
-        // Write-then-rename so a crash mid-write cannot truncate the store.
-        let tmp = path().with_extension("json.tmp");
-        std::fs::write(&tmp, serde_json::to_vec_pretty(v).map_err(|e| e.to_string())?)
-            .map_err(|e| e.to_string())?;
-        std::fs::rename(&tmp, path()).map_err(|e| e.to_string())
-    }
-
-    pub fn empty() -> Value {
-        json!({
-            "v": 1,
-            "profile": {"name": "", "orcid": ""},
-            "projects": [],
-            "notes": [],
-            "commits": [],
-        })
-    }
-}
 
 /// Stage names in the order the board uses them.
 const STAGES: [&str; 6] = ["Idea", "Hypothesis", "Funding", "Experiments", "Data", "Publish"];
@@ -402,109 +325,6 @@ fn new_id(prefix: &str) -> String {
     format!("{prefix}-{n:x}")
 }
 
-
-// ---------------------------------------------------------------------------
-// Canonical serialization (docs/10 §1).
-//
-// Commit ids must be byte-identical on every machine. `serde_json::to_vec`
-// is NOT canonical: it preserves whatever ordering the Map type gives, and
-// serde_json's Map is only a BTreeMap because nothing in our graph enables
-// the `preserve_order` feature. Any future dependency that does would flip it
-// to IndexMap through feature unification and silently change every commit id
-// with no compile error. So we sort explicitly rather than rely on that.
-//
-// Floats are refused outright rather than encoded lossily — a measured
-// quantity belongs in the record as a decimal string plus a unit, which
-// docs/05 already implies.
-// ---------------------------------------------------------------------------
-mod canon {
-    use serde_json::Value;
-
-    #[derive(Debug)]
-    pub struct NotCanonical(pub String);
-
-    /// Serialize `v` canonically: object keys sorted, no insignificant
-    /// whitespace, floats rejected.
-    pub fn to_vec(v: &Value) -> Result<Vec<u8>, NotCanonical> {
-        let mut out = Vec::new();
-        write(v, &mut out)?;
-        Ok(out)
-    }
-
-    fn write(v: &Value, out: &mut Vec<u8>) -> Result<(), NotCanonical> {
-        match v {
-            Value::Null => out.extend_from_slice(b"null"),
-            Value::Bool(true) => out.extend_from_slice(b"true"),
-            Value::Bool(false) => out.extend_from_slice(b"false"),
-            Value::Number(n) => {
-                // Integers only. A float here is a bug in the caller, not
-                // something to paper over with a rounded encoding.
-                if let Some(i) = n.as_i64() {
-                    out.extend_from_slice(i.to_string().as_bytes());
-                } else if let Some(u) = n.as_u64() {
-                    out.extend_from_slice(u.to_string().as_bytes());
-                } else {
-                    return Err(NotCanonical(format!(
-                        "float {n} cannot be canonicalised; store measured values \
-                         as a decimal string with a unit"
-                    )));
-                }
-            }
-            Value::String(s) => write_str(s, out),
-            Value::Array(a) => {
-                out.push(b'[');
-                for (i, item) in a.iter().enumerate() {
-                    if i > 0 {
-                        out.push(b',');
-                    }
-                    write(item, out)?;
-                }
-                out.push(b']');
-            }
-            Value::Object(m) => {
-                // Sort by key. serde_json's Map iteration order is an
-                // implementation detail we deliberately do not trust.
-                let mut keys: Vec<&String> = m.keys().collect();
-                keys.sort();
-                out.push(b'{');
-                for (i, k) in keys.iter().enumerate() {
-                    if i > 0 {
-                        out.push(b',');
-                    }
-                    write_str(k, out);
-                    out.push(b':');
-                    write(&m[*k], out)?;
-                }
-                out.push(b'}');
-            }
-        }
-        Ok(())
-    }
-
-    fn write_str(s: &str, out: &mut Vec<u8>) {
-        out.push(b'"');
-        for c in s.chars() {
-            match c {
-                '"' => out.extend_from_slice(b"\\\""),
-                '\\' => out.extend_from_slice(b"\\\\"),
-                '\n' => out.extend_from_slice(b"\\n"),
-                '\r' => out.extend_from_slice(b"\\r"),
-                '\t' => out.extend_from_slice(b"\\t"),
-                c if (c as u32) < 0x20 => {
-                    out.extend_from_slice(format!("\\u{:04x}", c as u32).as_bytes())
-                }
-                c => {
-                    let mut buf = [0u8; 4];
-                    out.extend_from_slice(c.encode_utf8(&mut buf).as_bytes());
-                }
-            }
-        }
-        out.push(b'"');
-    }
-}
-
-/// Domain separation: a commit signature must never verify as anything else.
-const COMMIT_DOMAIN: &[u8] = b"olb.commit.v1\0";
 
 /// Pull one top-level section out of the compiled-in fixture document.
 fn fixture_part(key: &str) -> serde_json::Value {
@@ -545,8 +365,10 @@ fn verify(bytes: &[u8]) -> Option<serde_json::Value> {
     let key = ed25519_dalek::VerifyingKey::from_bytes(&key_bytes).ok()?;
     let sig = ed25519_dalek::Signature::from_bytes(&sig_bytes);
 
-    // Sign over the canonical serialization of the payload only.
-    let signed_bytes = serde_json::to_vec(payload).ok()?;
+    // Must match publish_test_record exactly: canonical bytes under the
+    // same domain tag. Verifying with a different serializer than the one
+    // that signed is how two honest nodes reject each other's records.
+    let signed_bytes = olb_vcs::hashing::preimage(RECORD_DOMAIN, payload).ok()?;
     key.verify(&signed_bytes, &sig).ok()?;
     Some(v)
 }
@@ -569,8 +391,7 @@ fn session_json(identity: &str) -> String {
 }
 
 /// Announce that the durable store changed, so every view refreshes.
-fn announce_store() {
-    let st = store::load();
+fn announce_store(st: &serde_json::Value) {
     let summary = serde_json::json!({
         "projects": st.get("projects").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0),
         "notes":    st.get("notes").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0),
@@ -602,11 +423,20 @@ impl OlbCoreModule for OlbCore {
         let author = self.author_hex();
         let payload = record::payload(&title, &author, now_ms());
 
-        let signed_bytes = match serde_json::to_vec(&payload) {
+        // Canonical, domain-separated bytes — NOT serde_json::to_vec.
+        // Phase 0 signed and verified with the plain serializer, which only
+        // agreed between two nodes because both happened to emit the same
+        // key order. Any crate enabling serde_json's preserve_order would
+        // have flipped that, and every peer's signature check would start
+        // failing for reasons no error message would explain.
+        let signed_bytes = match olb_vcs::hashing::preimage(RECORD_DOMAIN, &payload) {
             Ok(b) => b,
             Err(e) => return record::err("internal", &e.to_string()),
         };
-        let sig = self.signing.sign(&signed_bytes);
+        let sig = match self.app() {
+            Ok(app) => app.identity.signing.sign(&signed_bytes),
+            Err(e) => return record::err("locked", &e),
+        };
         let envelope = record::signed(&author, payload, &hex::encode(sig.to_bytes()));
 
         let wire = envelope.to_string();
@@ -661,7 +491,7 @@ impl OlbCoreModule for OlbCore {
     }
 
     fn projects(&mut self) -> String {
-        store::load()
+        self.state_doc()
             .get("projects")
             .cloned()
             .unwrap_or_else(|| serde_json::json!([]))
@@ -669,7 +499,7 @@ impl OlbCoreModule for OlbCore {
     }
 
     fn notes(&mut self) -> String {
-        let st = store::load();
+        let st = self.state_doc();
         let mut notes = st
             .get("notes")
             .and_then(|v| v.as_array())
@@ -680,24 +510,31 @@ impl OlbCoreModule for OlbCore {
     }
 
     fn profile(&mut self) -> String {
-        let st = store::load();
+        let st = self.state_doc();
         let p = st.get("profile").cloned().unwrap_or_else(|| serde_json::json!({}));
         serde_json::json!({
             "name":        p.get("name").and_then(|v| v.as_str()).unwrap_or(""),
             "orcid":       p.get("orcid").and_then(|v| v.as_str()).unwrap_or(""),
             "fingerprint": self.author_hex(),
-            "profileDir":  store::dir().to_string_lossy(),
+            "profileDir":  app::profile_dir().to_string_lossy(),
         })
         .to_string()
     }
 
     fn set_profile(&mut self, name: String, orcid: String) -> String {
-        let mut st = store::load();
+        let mut st = self.state_doc();
         st["profile"] = serde_json::json!({"name": name, "orcid": orcid});
-        self.commit(&mut st, "profile.update", serde_json::json!({"name": name, "orcid": orcid}));
-        match store::save(&st) {
+        if let Err(e) = self.commit_action(
+            "member",
+            PERSONAL,
+            serde_json::json!({"name": name, "orcid": orcid}),
+            "Update profile",
+        ) {
+            return record::err("internal", &e);
+        }
+        match self.save_doc(&st) {
             Ok(()) => {
-                announce_store();
+                announce_store(&st);
                 self.profile()
             }
             Err(e) => record::err("internal", &e),
@@ -705,7 +542,7 @@ impl OlbCoreModule for OlbCore {
     }
 
     fn set_current_project(&mut self, project_id: String) -> String {
-        let mut st = store::load();
+        let mut st = self.state_doc();
         let exists = st
             .get("projects")
             .and_then(|v| v.as_array())
@@ -715,9 +552,9 @@ impl OlbCoreModule for OlbCore {
             return record::err("not_found", &format!("no project {project_id}"));
         }
         st["current"] = serde_json::Value::String(project_id);
-        match store::save(&st) {
+        match self.save_doc(&st) {
             Ok(()) => {
-                announce_store();
+                announce_store(&st);
                 st["current"].to_string()
             }
             Err(e) => record::err("internal", &e),
@@ -742,9 +579,9 @@ impl OlbCoreModule for OlbCore {
             .cloned()
             .unwrap_or_else(|| STAGES.iter().map(|s| serde_json::json!(s)).collect());
 
-        let mut st = store::load();
+        let mut st = self.state_doc();
         let project = serde_json::json!({
-            "id": new_id("proj"),
+            "id": app::new_project_id(),
             "title": title,
             "summary": str_of("summary"),
             "description": str_of("description"),
@@ -774,10 +611,17 @@ impl OlbCoreModule for OlbCore {
             .as_array_mut()
             .map(|a| a.push(project.clone()));
         st["current"] = project["id"].clone();
-        self.commit(&mut st, "project.create", project.clone());
-        match store::save(&st) {
+        if let Err(e) = self.commit_action(
+            "project",
+            project["id"].as_str().unwrap_or_default(),
+            project.clone(),
+            &format!("Create project: {title}"),
+        ) {
+            return record::err("internal", &e);
+        }
+        match self.save_doc(&st) {
             Ok(()) => {
-                announce_store();
+                announce_store(&st);
                 project.to_string()
             }
             Err(e) => record::err("internal", &e),
@@ -788,7 +632,7 @@ impl OlbCoreModule for OlbCore {
         if title.trim().is_empty() {
             return record::err("invalid", "a note needs a title");
         }
-        let mut st = store::load();
+        let mut st = self.state_doc();
         let note = serde_json::json!({
             "id": new_id("note"),
             "title": title.trim(),
@@ -798,10 +642,18 @@ impl OlbCoreModule for OlbCore {
             "promoted": serde_json::Value::Null,
         });
         st["notes"].as_array_mut().map(|a| a.push(note.clone()));
-        self.commit(&mut st, "note.create", note.clone());
-        match store::save(&st) {
+        let note_title = note["title"].as_str().unwrap_or_default().to_string();
+        if let Err(e) = self.commit_action(
+            "entry",
+            PERSONAL,
+            note.clone(),
+            &format!("Note: {note_title}"),
+        ) {
+            return record::err("internal", &e);
+        }
+        match self.save_doc(&st) {
             Ok(()) => {
-                announce_store();
+                announce_store(&st);
                 note.to_string()
             }
             Err(e) => record::err("internal", &e),
@@ -815,7 +667,7 @@ impl OlbCoreModule for OlbCore {
                 &format!("unknown stage '{stage}'; expected one of {STAGES:?}"),
             );
         };
-        let mut st = store::load();
+        let mut st = self.state_doc();
 
         // The note is kept, not consumed: records are append-only, so
         // promotion marks the note and adds an idea rather than moving it.
@@ -876,10 +728,17 @@ impl OlbCoreModule for OlbCore {
             }
         }
 
-        self.commit(&mut st, "note.promote", idea.clone());
-        match store::save(&st) {
+        if let Err(e) = self.commit_action(
+            "idea",
+            &project_id,
+            idea.clone(),
+            &format!("Promote note to {}", STAGES[stage_no - 1]),
+        ) {
+            return record::err("internal", &e);
+        }
+        match self.save_doc(&st) {
             Ok(()) => {
-                announce_store();
+                announce_store(&st);
                 idea.to_string()
             }
             Err(e) => record::err("internal", &e),
@@ -887,14 +746,32 @@ impl OlbCoreModule for OlbCore {
     }
 
     fn history(&mut self) -> String {
-        // The live commit log is already real; the branches, tags, diff and
-        // merge-request shapes S6 renders are not yet. Serve the fixture for
-        // those and splice in the real commits so the screen is not a total
-        // fiction (docs/10 specifies the real model).
-        let mut h = fixture_part("history");
-        let st = store::load();
-        if let (Some(obj), Some(real)) = (h.as_object_mut(), st.get("commits")) {
-            obj.insert("liveCommits".into(), real.clone());
+        // Per project, not global. A commit header carries its project and
+        // the refs are namespaced per project, so this is a branch walk
+        // rather than a filter over everything the node has ever done.
+        let project = self.current_project();
+        if project.is_empty() {
+            return serde_json::json!({
+                "commits": [], "branches": [], "tags": [],
+                "empty": "No project selected",
+            })
+            .to_string();
+        }
+        let Ok(app) = self.app() else {
+            return record::err("locked", "the store is not open");
+        };
+        let mut h = app.history(&project, 200);
+
+        // The diff and merge-request shapes S6 draws are not wired yet, so
+        // those sections still come from the fixture. The commit graph,
+        // lanes and anchor marks above are real.
+        if let Some(obj) = h.as_object_mut() {
+            let fx = fixture_part("history");
+            for k in ["mergeRequest", "diff"] {
+                if let Some(v) = fx.get(k) {
+                    obj.insert(k.into(), v.clone());
+                }
+            }
         }
         h.to_string()
     }
@@ -936,7 +813,7 @@ impl OlbCoreModule for OlbCore {
 
         // Live board, built from the durable store. Same shape as the
         // fixture so the view does not change (docs/03 S1).
-        let st = store::load();
+        let st = self.state_doc();
         let projects = st.get("projects").and_then(|v| v.as_array()).cloned().unwrap_or_default();
         let commits = st.get("commits").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0);
 
