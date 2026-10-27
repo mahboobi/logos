@@ -95,7 +95,15 @@ Stored encrypted with the idea key (or project key for project-level types) unle
   after accepting it and returning a `tx_hash`. Serialise submissions and treat
   an anchor as landed only once the account reads back (docs/08 R12).
 - Flush policy from project settings: every change / every few minutes (default; target 5 min or 100 commits) / daily / key moments only (pre-registration, milestone, publication — always flush immediately at these).
-- `project_tag` = `H(project_id || project_salt)` for Private/Invite-only projects so the chain does not reveal project identity.
+- `project_tag` keeps project identity off chain for Private and Invite-only
+  projects. **Not** the literal `H(project_id || project_salt)` this line used
+  to specify: the hash is domain-separated and both inputs are length-framed,
+  because bare concatenation of a variable-length id with a secret salt makes
+  `("ab", "c")` and `("a", "bc")` produce the same tag — two projects sharing
+  one registry PDA, which is the exact collision the `project_tag` seed was
+  added on 26 Oct to fix. Implemented in `olb_vcs::anchor::project_tag`.
+  Nothing on chain depends on the old spelling; the existing anchors used
+  literal test tags.
 - Commitments (hypothesis, idea) are separate calls: `olb_registry.commit(tag, fingerprint)`; reveal = publishing salt + record; verification recomputes the fingerprint.
 
 ## 5. Sync and snapshots

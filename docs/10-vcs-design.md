@@ -522,15 +522,36 @@ root(D[0:n]) for n > 1:
 Verify:
 
 ```
-h = SHA256(0x00 || commit_id_bytes); i = leaf_index; n = tree_size
-for sib in path:
+sides = []; i = leaf_index; n = tree_size
+while n > 1:                          # walk DOWN, recording sides only
     k = largest power of two < n
-    if i < k:  h = SHA256(0x01 || h   || sib); n = k
-    else:      h = SHA256(0x01 || sib || h  ); i -= k; n -= k
-assert n == 1 && h == anchored_root
+    if i < k:  sides.push(LEFT);  n = k
+    else:      sides.push(RIGHT); i -= k; n -= k
+assert len(sides) == len(path)        # before hashing anything
+h = SHA256(0x00 || commit_id_bytes)   # then hash UP
+for (sib, side) in zip(path, reversed(sides)):
+    h = side == LEFT ? SHA256(0x01 || h || sib) : SHA256(0x01 || sib || h)
+assert h == anchored_root
 ```
 
 Path length is at most `ceil(log2(n))`.
+
+**Corrected 27 Oct 2026.** The previous version of this loop descended from
+the root while consuming `path` front to back, which pairs the **top** split
+with the **deepest** sibling — `path` is bottom-up per RFC 6962 §2.1.1. It
+agrees for a left-most leaf and disagrees for almost everything else: at
+`n = 3, i = 1` it computes `node(l1, l0)` where the tree holds
+`node(l0, l1)`. The sides it derived were right; the order they were applied
+in was not. Found by implementing it verbatim and watching seven tests fail.
+
+Checking `len(sides) == len(path)` before hashing is not tidiness: without
+it a short path can be padded out to a root, and a long one can carry extra
+nodes past it, which is proof malleability a relaying peer can exploit.
+
+One thing inclusion deliberately does not promise: `tree_size` is not fully
+bound by the proof, because `sides(0, 3) == sides(0, 4)` — a left-most leaf
+verifies under either. That is inherent to RFC 6962 and harmless here, since
+the root is the authoritative binding and the PDA stores `count` beside it.
 
 **Proofs are recomputed on demand from `anchor_leaves`, not stored.** docs/05 §4
 says "store each commit's Merkle path with the batch number" — that is wrong for
