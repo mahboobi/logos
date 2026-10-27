@@ -597,14 +597,16 @@ fn display_is_clean(s: &str, max_chars: usize) -> bool {
 
 /// Sanitise at mint time, so OLB never produces an ID whose signed name a
 /// peer would have to refuse.
+///
+/// An EMPTY name is allowed. It used to be refused, which bricked first run:
+/// `load_or_create` takes the name from the stored profile, a fresh profile
+/// has none, so a new node could never create an identity at all and the
+/// whole store stayed locked. A display name is self-declared and never
+/// verified — the fingerprint is the only identifier that means anything —
+/// so "no name declared" is a legitimate state, and an honest one. The
+/// length cap and the sanitising below still apply to anything non-empty.
 fn clean_name(name: &str) -> Result<String> {
-    let cleaned = sanitise_display(name, NAME_MAX_CHARS);
-    if cleaned.is_empty() {
-        return Err(KeyError::Refused(
-            "a display name is required; it is self-declared and never verified".into(),
-        ));
-    }
-    Ok(cleaned)
+    Ok(sanitise_display(name, NAME_MAX_CHARS))
 }
 
 fn clean_orcid(orcid: Option<&str>) -> Result<Option<String>> {
@@ -808,6 +810,35 @@ mod tests {
     }
 
     #[test]
+    fn an_identity_can_be_created_with_no_display_name() {
+        // The first-run path: a fresh profile has no name, load_or_create
+        // passes "" through, and refusing it left the whole store locked
+        // with the user looking at an empty board. A name is self-declared
+        // and never verified, so having none is legitimate.
+        let me = generate("", None).expect("an empty name must be allowed");
+        assert_eq!(me.public.name, "");
+        let id = encode_id(&me.public).unwrap();
+        let back = decode_id(&id).expect("an ID with no name must round-trip");
+        assert_eq!(back.name, "");
+        assert_eq!(back.sig_pk, me.public.sig_pk);
+        // The fingerprint is the real identifier and is unaffected.
+        assert!(!fingerprint(&me.public).is_empty());
+    }
+
+    #[test]
+    fn a_name_can_be_added_later_without_changing_the_keys() {
+        let mut me = generate("", None).unwrap();
+        let fp_before = fingerprint(&me.public);
+        let pk_before = me.public.sig_pk.clone();
+        resign(&mut me, "Priya Raman", None).unwrap();
+        assert_eq!(me.public.name, "Priya Raman");
+        assert_eq!(me.public.sig_pk, pk_before);
+        // Fingerprint covers the keys, not the name, so it must not move.
+        assert_eq!(fingerprint(&me.public), fp_before);
+        decode_id(&encode_id(&me.public).unwrap()).expect("still valid after rename");
+    }
+
+    #[test]
     fn a_hostile_display_name_is_sanitised_at_mint_time() {
         let nasty = format!("Ali\u{202E}ce\u{0007}{}", "x".repeat(10_000));
         let me = generate(&nasty, None).unwrap();
@@ -819,8 +850,13 @@ mod tests {
     }
 
     #[test]
-    fn an_empty_name_is_refused_and_a_bad_orcid_is_refused() {
-        assert!(generate("   ", None).is_err());
+    fn a_blank_name_is_accepted_and_a_bad_orcid_is_refused() {
+        // A whitespace-only name sanitises to empty, which is allowed: this
+        // test previously asserted the opposite and that assertion was the
+        // bug — it locked the store on every first run.
+        assert_eq!(generate("   ", None).unwrap().public.name, "");
+        // A malformed ORCID is still refused: unlike a name, it has a
+        // checksum, so a wrong one is an error rather than a claim.
         assert!(generate("Rui", Some("1234-5678-9012-3456")).is_err());
         // Blank ORCID means "not given", not "invalid".
         assert_eq!(generate("Rui", Some("  ")).unwrap().public.orcid, None);
