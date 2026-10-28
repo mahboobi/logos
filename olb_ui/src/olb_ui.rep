@@ -19,6 +19,9 @@ class OlbUi
     SLOT(void setCurrentProject(QString projectId))
     SLOT(void createNote(QString title, QString body))
     SLOT(void promoteNote(QString noteId, QString projectId, QString stage))
+    // Add work to a project directly. Without this a project created from
+    // New Project holds nothing and can never finish its first stage.
+    SLOT(void createIdea(QString projectId, QString title, QString summary))
     SLOT(void saveProfile(QString name, QString orcid))
     SLOT(void openRecord(QString recordId))
 
@@ -46,6 +49,11 @@ class OlbUi
     PROP(QString members="{}" READONLY)
     PROP(QString openedRecord="{}" READONLY)
     // Last create/promote outcome, for inline error reporting.
+    // The project's stage rides along in `board` (stage, stageName,
+    // stageNeeds, stagesUsed) rather than in a PROP of its own. Every
+    // backend refresh is already eight synchronous round-trips and each one
+    // can wedge the UI thread (docs/08 R21), so a ninth call to say where a
+    // project has got to would buy nothing and cost availability.
     PROP(QString lastActionResult="" READONLY)
     PROP(QString coreStatus="" READONLY)
     PROP(bool coreReachable=false READONLY)

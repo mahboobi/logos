@@ -31,6 +31,7 @@ public:
     void inviteMember(QString projectId, QString olbId, QString role) override;
     void acceptInvite(QString inviteId) override;
     void createProject(QString specJson) override;
+    void createIdea(QString projectId, QString title, QString summary) override;
     void setCurrentProject(QString projectId) override;
     void createNote(QString title, QString body) override;
     void promoteNote(QString noteId, QString projectId, QString stage) override;

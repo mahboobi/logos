@@ -28,6 +28,7 @@ Stored encrypted with the idea key (or project key for project-level types) unle
 
 | Type | Fields |
 | --- | --- |
+| project | `title`, `summary`, `stages[]` (the stages this project uses, an ordered subset of the six), `stage` (1-based position **in `stages`**, not in the canonical six), `privacy`, `anchoring`, `replica`, `references[]` |
 | idea | `title`, `summary`, `question`, `motivation`, `stages_enabled[]`, `current_stage` |
 | hypothesis | `label` (H1), `statement`, `predictions[] {label, text}`, `falsification`, `analysis_plan`, `review {approvals[]}`, `commitment {fingerprint, batch} | null`, `revealed` |
 | proposal | `title`, `budget`, `milestones[] {id, title, amount, evidence[], state}`, `reviewers[]`, `threshold`, `lez_program_account` |
@@ -35,6 +36,24 @@ Stored encrypted with the idea key (or project key for project-level types) unle
 | dataset | `title`, `ro_crate_cid`, `files[]`, `derived_from[]` |
 | result | `statement`, `hypothesis_ref`, `outcome: held | not_held | partial`, `notes` |
 | publication | `title`, `manuscript_cid`, `licence`, `bundle_cid`, `reveals[]`, `credits[]` |
+
+**`project.stage`, added 28 Oct 2026 (docs/08 D18).** The stage belongs to the
+project, not to each idea: all the work inside a project is at the project's
+stage. It is written only by the core, only as a consequence of work appearing
+in the project, and every move produces its own signed commit ("Stage 1
+complete, now at stage 2") so the route through the stages is recorded rather
+than inferred. There is no operation that sets it directly.
+
+This supersedes `idea.current_stage` as the authoritative stage. The field is
+left on the idea record — records are append-only and nothing in history is
+ever rewritten — but it now records **where an idea entered**, which is useful
+provenance and not a position. `idea.stages_enabled[]` is likewise superseded
+by `project.stages[]`; a stage list belongs to the thing that moves through it.
+
+A position relative to the project's **own** stage list matters: a project
+that uses only Idea, Experiments and Publish has `stage: 2` meaning
+Experiments. Reading it against the canonical six would report Hypothesis — a
+stage that project does not have.
 
 ## 2. Commit
 

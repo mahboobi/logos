@@ -15,7 +15,13 @@ Item {
 
     readonly property var ideas: boardData.ideas || []
     readonly property var stages: boardData.stagesUsed || []
+    // The stage belongs to the project (docs/08 D18) and rides along in the
+    // board payload, so showing it costs no extra IPC round-trip (R21).
+    readonly property int stageAt: boardData.stage || 1
+    readonly property string stageNeeds: boardData.stageNeeds || ""
     property string filter: "All"
+
+    signal addIdea(string title, string summary)
 
     // Counts per stage: an idea counts at its CURRENT stage, and a published
     // idea counts under Publish regardless of stage (docs/03 S1 step 3).
@@ -120,6 +126,15 @@ Item {
                         kind: "attention"
                     }
                 }
+
+                StageTracker {
+                    Layout.fillWidth: true
+                    Layout.topMargin: Theme.s8
+                    visible: board.stages.length > 0
+                    stages: board.stages
+                    at: board.stageAt
+                    needs: board.stageNeeds
+                }
             }
 
             // ---- 2. Status cards ----
@@ -172,11 +187,95 @@ Item {
                     color: Theme.ink
                 }
 
-                FilterPills {
+                RowLayout {
                     Layout.fillWidth: true
-                    entries: board.pillEntries
-                    selected: board.filter
-                    onPicked: function (label) { board.filter = label; }
+                    spacing: Theme.s16
+
+                    FilterPills {
+                        Layout.fillWidth: true
+                        entries: board.pillEntries
+                        selected: board.filter
+                        onPicked: function (label) { board.filter = label; }
+                    }
+
+                    Button {
+                        text: composer.visible ? "Cancel" : "Add idea"
+                        implicitHeight: Theme.touchTarget
+                        Accessible.name: composer.visible
+                                         ? "Cancel adding an idea" : "Add an idea"
+                        onClicked: {
+                            composer.visible = !composer.visible;
+                            if (composer.visible) ideaTitle.forceActiveFocus();
+                            else { ideaTitle.text = ""; ideaSummary.text = ""; }
+                        }
+                    }
+                }
+
+                // Adding an idea is how the Idea stage gets finished, so the
+                // composer lives next to the tracker that is waiting on it
+                // rather than behind a separate screen.
+                Panel {
+                    id: composer
+                    visible: false
+                    Layout.fillWidth: true
+                    Layout.topMargin: Theme.s8
+                    title: "Add an idea to this project"
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: Theme.s12
+
+                        FieldLabel { text: "Title" }
+                        TextField {
+                            id: ideaTitle
+                            Layout.fillWidth: true
+                            implicitHeight: Theme.touchTarget
+                            font.family: Theme.sans
+                            font.pixelSize: Theme.body
+                            placeholderText: "What is the idea?"
+                            Accessible.name: "Idea title"
+                            onAccepted: addBtn.clicked()
+                        }
+
+                        FieldLabel { text: "Summary" }
+                        TextArea {
+                            id: ideaSummary
+                            Layout.fillWidth: true
+                            implicitHeight: Theme.touchTarget * 2
+                            font.family: Theme.sans
+                            font.pixelSize: Theme.body
+                            wrapMode: TextArea.Wrap
+                            placeholderText: "Optional — a sentence or two."
+                            Accessible.name: "Idea summary"
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: Theme.s12
+
+                            PrimaryButton {
+                                id: addBtn
+                                text: "Add idea"
+                                accessibleName: "Add idea"
+                                enabled: ideaTitle.text.trim().length > 0
+                                onClicked: {
+                                    board.addIdea(ideaTitle.text, ideaSummary.text);
+                                    ideaTitle.text = "";
+                                    ideaSummary.text = "";
+                                    composer.visible = false;
+                                }
+                            }
+                            Text {
+                                Layout.fillWidth: true
+                                text: "Recorded as a signed commit. The first idea "
+                                      + "finishes the Idea stage."
+                                font.family: Theme.sans
+                                font.pixelSize: Theme.small
+                                color: Theme.ink3
+                                wrapMode: Text.Wrap
+                            }
+                        }
+                    }
                 }
             }
 

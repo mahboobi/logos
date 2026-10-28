@@ -129,6 +129,12 @@ void OlbUiBackend::createProject(QString specJson)
     refreshBoard();
 }
 
+void OlbUiBackend::createIdea(QString projectId, QString title, QString summary)
+{
+    setLastActionResult(modules().olb_core.create_idea(projectId, title, summary));
+    refreshBoard();
+}
+
 void OlbUiBackend::setCurrentProject(QString projectId)
 {
     setLastActionResult(modules().olb_core.set_current_project(projectId));

@@ -210,6 +210,48 @@ every commit) changes between runs. Settings says so on screen. Durable
 identity needs the key sealed at rest, which is a key-management decision, not
 just a file write.
 
+### D18 — A stage belongs to the project, and only work advances it (DECIDED 28 Oct 2026)
+
+Asked because a project created from New Project showed no stage anything, and
+there was no control to change one. Two answers, both from the user:
+
+**1. The stage is on the PROJECT, not on each idea.** All the work inside a
+project is at the project's stage; the project is what moves. Previously
+`stage` (1–6) lived on each idea and nothing lived on the project.
+
+**2. A stage is finished only by doing its work.** There is no control that
+sets a stage — no dropdown, no "next stage" button, not even a guarded
+override. `sync_stage` is the single writer and runs when work lands.
+
+**Consequences, accepted:**
+
+- A project advances only as far as its work reaches. With one idea it goes
+  Idea → Hypothesis and stops, showing "Pre-register a hypothesis". Stages
+  whose screens are unbuilt cannot be finished, so the project waits there.
+  This is the decision working, not a stall — but it does mean the visible
+  stage machinery is only as complete as the stage screens.
+- A project with no ideas can never finish its first stage, so `create_idea`
+  had to exist: before it, work could only enter a project by promoting a
+  personal note, and a project created from New Project was a dead end.
+- Each move writes a signed commit ("Stage 1 complete, now at stage 2"), so
+  the path through the stages is in history rather than inferred.
+- **`docs/03` S1 is partly superseded.** Its per-idea "Stage {n} of {N}" chips
+  and per-stage FilterPills assume each idea has its own stage. With one stage
+  per project every idea in view shares it, so the filters no longer partition
+  anything. Kept working (cards display the project's stage) rather than
+  removed, but the screen wants a revisit.
+- The rules live in `olb-vcs::stages` as pure functions over the project
+  document, not in `olb_core`, because the module crate cannot run
+  `cargo test` (R8/R12). `olb_core` re-exports them so the two can never
+  disagree about where a project has got to.
+
+**Completion criteria** are an assumption, not something the user specified: a
+stage is done when the project holds the work that stage produces — an idea
+for Idea, a pre-registered hypothesis for Hypothesis, a funding decision for
+Funding, a protocol run for Experiments, a dataset for Data, a published idea
+for Publish. Flagged for review; the Experiments criterion in particular has
+to survive Phase 1d's protocols.
+
 ### D17 — "Those who pay to access storage" (RAISED 27 Oct 2026, BLOCKING parts of docs/12)
 
 Stated in review of the data-collection handoff: *"Data is stored in Logos

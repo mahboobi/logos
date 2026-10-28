@@ -94,6 +94,16 @@ pub trait OlbCoreModule: Send + 'static {
     /// named stage ("Idea", "Hypothesis", "Experiments" or "Data").
     fn promote_note(&mut self, note_id: String, project_id: String, stage: String) -> String;
 
+    /// Add an idea straight to a project, without going through a personal
+    /// note. Until this existed a project could only receive work by
+    /// promoting a note, so a project created from New Project held nothing
+    /// and could never finish its first stage. Produces a signed commit.
+    fn create_idea(&mut self, project_id: String, title: String, summary: String) -> String;
+
+    /// The project's stage: which stages it uses, where it has reached, and
+    /// what each stage is still waiting for. Read by the board's tracker.
+    fn project_stage(&mut self, project_id: String) -> String;
+
     /// The local profile (name, orcid, fingerprint) as JSON.
     fn profile(&mut self) -> String;
 
@@ -416,21 +426,34 @@ fn fixtures_on() -> bool {
 
 
 /// Stage names in the order the board uses them.
-const STAGES: [&str; 6] = ["Idea", "Hypothesis", "Funding", "Experiments", "Data", "Publish"];
+// Stage rules live in olb-vcs: pure functions over the project document,
+// tested there without a store or a key. Re-exported rather than copied so
+// the core and its tests can never disagree about where a project has got to.
+use olb_vcs::stages::{reached_stage, stage_complete, stage_index, stage_needs, STAGES};
 
-/// 1-based stage index for a stage name, accepting the aliases the UI offers
-/// ("Experiment", "Data/Results").
-fn stage_index(name: &str) -> Option<usize> {
-    let n = name.trim().to_ascii_lowercase();
-    let n = match n.as_str() {
-        "experiment" => "experiments",
-        "data/results" | "results" => "data",
-        other => other,
-    };
-    STAGES
-        .iter()
-        .position(|s| s.to_ascii_lowercase() == n)
-        .map(|i| i + 1)
+/// Set `project["stage"]` to the stage its work has reached, in place.
+///
+/// Returns `Some((from, to))` when it moved, so the caller can commit the
+/// move. This is the ONLY writer of a project's stage: there is no control
+/// that sets one directly, by decision (docs/08 D18), so a stage can only
+/// change as a consequence of work appearing in the project.
+fn sync_stage(st: &mut serde_json::Value, project_id: &str) -> Option<(usize, usize)> {
+    let projects = st.get_mut("projects")?.as_array_mut()?;
+    let project = projects
+        .iter_mut()
+        .find(|p| p.get("id").and_then(|i| i.as_str()) == Some(project_id))?;
+
+    let from = project
+        .get("stage")
+        .and_then(|v| v.as_u64())
+        .map(|n| n as usize)
+        .unwrap_or(1);
+    let to = reached_stage(project);
+    if to == from {
+        return None;
+    }
+    project["stage"] = serde_json::json!(to);
+    Some((from, to))
 }
 
 fn new_id(prefix: &str) -> String {
@@ -716,6 +739,11 @@ impl OlbCoreModule for OlbCore {
             "anchoring": str_of("anchoring"),
             "approvals": str_of("approvals"),
             "replica": str_of("replica"),
+            // Where the project has reached. A project starts at its first
+            // stage and only moves when that stage's work is done — the
+            // stage lives here, on the project, not on each idea
+            // (docs/08 D18).
+            "stage": 1,
             "allowBranches": spec.get("allowBranches").and_then(|v| v.as_bool()).unwrap_or(true),
             "autoTag": spec.get("autoTag").and_then(|v| v.as_bool()).unwrap_or(true),
             "references": spec.get("references").cloned().unwrap_or_else(|| serde_json::json!([])),
@@ -887,6 +915,174 @@ impl OlbCoreModule for OlbCore {
         }
     }
 
+    fn create_idea(&mut self, project_id: String, title: String, summary: String) -> String {
+        let title = title.trim().to_string();
+        if title.is_empty() {
+            return record::err("invalid", "an idea needs a title");
+        }
+        let mut st = self.state_doc();
+
+        // The idea enters at the stage the PROJECT is at — that is what
+        // putting the stage on the project means (docs/08 D18). It is stored
+        // for the record only; the board reads the project's stage, so an
+        // idea cannot drift away from the project it belongs to.
+        let Some(project) = st
+            .get("projects")
+            .and_then(|v| v.as_array())
+            .and_then(|a| {
+                a.iter()
+                    .find(|p| p.get("id").and_then(|i| i.as_str()) == Some(&project_id))
+            })
+            .cloned()
+        else {
+            return record::err("not_found", &format!("no project {project_id}"));
+        };
+        let stage_no = reached_stage(&project);
+        let stage_name = project
+            .get("stages")
+            .and_then(|v| v.as_array())
+            .and_then(|a| a.get(stage_no - 1))
+            .and_then(|v| v.as_str())
+            .unwrap_or(STAGES[0])
+            .to_string();
+
+        let idea = serde_json::json!({
+            "id": new_id("idea"),
+            "stage": stage_no,
+            "published": false,
+            "title": title,
+            "summary": summary.trim(),
+            "privacy": project.get("privacy").cloned().unwrap_or(serde_json::json!("Private")),
+            "facts": [
+                {"k": "Hypothesis", "v": "Not yet"},
+                {"k": "Funding",    "v": "Not started"},
+                {"k": "Notebook",   "v": "No entries"},
+                {"k": "Data",       "v": "None yet"},
+            ],
+            "branch": "main",
+            "headCommit": "",
+            "headMessage": format!("Added at {stage_name}"),
+            "commitSummary": "1 commit",
+            "lead": st.pointer("/profile/name").and_then(|v| v.as_str()).unwrap_or("You"),
+            "people": "1 person",
+            "updated": "just now",
+            "open": "",
+            "fromNote": serde_json::Value::Null,
+        });
+
+        let mut attached = false;
+        if let Some(projects) = st["projects"].as_array_mut() {
+            for p in projects.iter_mut() {
+                if p.get("id").and_then(|i| i.as_str()) == Some(&project_id) {
+                    if let Some(a) = p["ideas"].as_array_mut() {
+                        a.push(idea.clone());
+                        attached = true;
+                    }
+                    break;
+                }
+            }
+        }
+        if !attached {
+            return record::err(
+                "internal",
+                &format!("project {project_id} has no ideas list to record this on"),
+            );
+        }
+
+        let idea_title = idea["title"].as_str().unwrap_or_default().to_string();
+        if let Err(e) = self.commit_action(
+            "idea",
+            &project_id,
+            idea.clone(),
+            &format!("Add idea: {idea_title}"),
+        ) {
+            return record::err("internal", &e);
+        }
+
+        // Adding the first idea is what finishes the Idea stage, so the move
+        // happens here rather than on a separate action.
+        let moved = sync_stage(&mut st, &project_id);
+        if let Some((from, to)) = moved {
+            if let Err(e) = self.commit_action(
+                "project",
+                &project_id,
+                serde_json::json!({"stage": to, "previousStage": from}),
+                &format!("Stage {from} complete, now at stage {to}"),
+            ) {
+                return record::err("internal", &e);
+            }
+        }
+
+        let pid = project_id.clone();
+        std::thread::spawn(move || publish_heads(&pid));
+        match self.save_doc(&st) {
+            Ok(()) => {
+                announce_store(&st);
+                serde_json::json!({
+                    "idea": idea,
+                    "stageMoved": moved.map(|(f, t)| serde_json::json!({"from": f, "to": t})),
+                })
+                .to_string()
+            }
+            Err(e) => record::err("internal", &e),
+        }
+    }
+
+    fn project_stage(&mut self, project_id: String) -> String {
+        let st = self.state_doc();
+        let id = if project_id.trim().is_empty() {
+            self.current_project()
+        } else {
+            project_id
+        };
+        let Some(project) = st
+            .get("projects")
+            .and_then(|v| v.as_array())
+            .and_then(|a| {
+                a.iter()
+                    .find(|p| p.get("id").and_then(|i| i.as_str()) == Some(id.as_str()))
+            })
+        else {
+            return serde_json::json!({"stages": [], "at": 0, "empty": "No project selected"})
+                .to_string();
+        };
+
+        let stages: Vec<String> = project
+            .get("stages")
+            .and_then(|v| v.as_array())
+            .map(|a| a.iter().filter_map(|s| s.as_str().map(String::from)).collect())
+            .unwrap_or_else(|| STAGES.iter().map(|s| s.to_string()).collect());
+        let at = reached_stage(project);
+
+        // Per stage: done, current, or waiting — and for the current one,
+        // what it is waiting for, because "nothing advances until the work
+        // is done" is only fair if the work is named.
+        let detail: Vec<serde_json::Value> = stages
+            .iter()
+            .enumerate()
+            .map(|(i, name)| {
+                let n = i + 1;
+                serde_json::json!({
+                    "n": n,
+                    "name": name,
+                    "state": if n < at { "done" } else if n == at { "current" } else { "waiting" },
+                    "needs": if stage_complete(project, name) { serde_json::Value::Null }
+                             else { serde_json::json!(stage_needs(name)) },
+                })
+            })
+            .collect();
+
+        serde_json::json!({
+            "projectId": id,
+            "stages": stages,
+            "at": at,
+            "name": stages.get(at - 1).cloned().unwrap_or_default(),
+            "count": stages.len(),
+            "detail": detail,
+        })
+        .to_string()
+    }
+
     fn history(&mut self) -> String {
         // Per project, not global. A commit header carries its project and
         // the refs are namespaced per project, so this is a branch walk
@@ -966,12 +1162,24 @@ impl OlbCoreModule for OlbCore {
             .find(|p| p.get("id").and_then(|i| i.as_str()) == Some(current_id.as_str()))
             .cloned()
             .or_else(|| projects.last().cloned());
-        let ideas = current
+        // The stage belongs to the project (docs/08 D18), so every idea is
+        // shown at the project's stage rather than at one of its own. The
+        // stored per-idea `stage` is left alone as a record of where it came
+        // in; overriding it here is what stops a card contradicting the
+        // tracker directly above it.
+        let project_stage = current.as_ref().map(reached_stage).unwrap_or(1);
+        let ideas: Vec<serde_json::Value> = current
             .as_ref()
             .and_then(|p| p.get("ideas"))
             .and_then(|v| v.as_array())
             .cloned()
-            .unwrap_or_default();
+            .unwrap_or_default()
+            .into_iter()
+            .map(|mut i| {
+                i["stage"] = serde_json::json!(project_stage);
+                i
+            })
+            .collect();
         let published = ideas
             .iter()
             .filter(|i| i.get("published").and_then(|v| v.as_bool()) == Some(true))
@@ -1025,6 +1233,23 @@ impl OlbCoreModule for OlbCore {
                 },
             },
             // The project's own stage list — a project may skip stages.
+            // Where this project has reached, and how many stages it uses.
+            "stage": project_stage,
+            "stageName": current
+                .as_ref()
+                .and_then(|p| p.get("stages"))
+                .and_then(|v| v.as_array())
+                .and_then(|a| a.get(project_stage - 1))
+                .and_then(|v| v.as_str())
+                .unwrap_or(STAGES[0]),
+            "stageNeeds": current
+                .as_ref()
+                .and_then(|p| p.get("stages"))
+                .and_then(|v| v.as_array())
+                .and_then(|a| a.get(project_stage - 1))
+                .and_then(|v| v.as_str())
+                .map(stage_needs)
+                .unwrap_or(""),
             "stagesUsed": current
                 .as_ref()
                 .and_then(|p| p.get("stages"))

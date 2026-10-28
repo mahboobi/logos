@@ -7,6 +7,7 @@ Badge 1.0 Badge.qml
 StatusCard 1.0 StatusCard.qml
 FilterPills 1.0 FilterPills.qml
 IdeaCard 1.0 IdeaCard.qml
+StageTracker 1.0 StageTracker.qml
 Board 1.0 Board.qml
 NewProject 1.0 NewProject.qml
 Notebook 1.0 Notebook.qml

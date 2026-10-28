@@ -18,6 +18,7 @@ pub mod hashing;
 pub mod merge;
 pub mod merkle;
 pub mod record;
+pub mod stages;
 pub mod store;
 pub mod sync;
 pub mod types;

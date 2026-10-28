@@ -274,6 +274,13 @@ Rectangle {
                 onNewProject: root.screen = "New project"
                 onNewEntry: root.screen = "Personal Notebook"
                 onRefresh: if (root.backend) root.backend.refreshBoard()
+                onAddIdea: function (title, summary) {
+                    // The board shows whichever project is current, so the
+                    // idea belongs to that one; the core rejects an empty id
+                    // rather than guessing.
+                    if (root.backend)
+                        root.backend.createIdea(root.currentProjectId, title, summary);
+                }
             }
 
             Notebook {
