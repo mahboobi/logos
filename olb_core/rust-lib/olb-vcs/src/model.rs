@@ -187,6 +187,284 @@ pub struct Envelope {
     pub co_sigs: Vec<String>,
 }
 
+/// Project privacy, chosen once and immutable after version 1 (§2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Privacy {
+    Open,
+    Private,
+    InviteOnly,
+}
+
+/// The licences the model allows. A closed list, not free text, because a
+/// bundle's licence has to be machine-checkable at publication.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Licence {
+    #[serde(rename = "CC-BY-4.0")]
+    CcBy40,
+    #[serde(rename = "CC0-1.0")]
+    Cc010,
+    #[serde(rename = "CC-BY-SA-4.0")]
+    CcBySa40,
+}
+
+/// How often commits are anchored on LEZ.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Anchoring {
+    Every,
+    Batched,
+    Daily,
+    Milestones,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Duration {
+    #[serde(rename = "lt_6m")]
+    LessThan6Months,
+    #[serde(rename = "6_12m")]
+    SixToTwelveMonths,
+    #[serde(rename = "1_2y")]
+    OneToTwoYears,
+    #[serde(rename = "gt_2y")]
+    OverTwoYears,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TeamSize {
+    #[serde(rename = "1")]
+    One,
+    #[serde(rename = "2_5")]
+    TwoToFive,
+    #[serde(rename = "6_15")]
+    SixToFifteen,
+    #[serde(rename = "gt_15")]
+    OverFifteen,
+}
+
+/// Project settings. Only `anchoring` is required.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Settings {
+    pub anchoring: Anchoring,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub merge_approvals: Option<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub replica: Option<bool>,
+    /// Open projects only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allow_visitors: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_tags: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reviewers_can_verify: Option<bool>,
+}
+
+/// A rich-text document. `blocks` stay loosely typed here: the block grammar
+/// is large (§8 names the editor as the biggest UI risk), and the schema is
+/// the thing that checks it. Keeping them as values means this crate does not
+/// have to re-state a grammar it cannot enforce better than the contract can.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RichDoc {
+    pub format: RichFormat,
+    pub blocks: Vec<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub crdt_state: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RichFormat {
+    #[serde(rename = "olb-blocks/1")]
+    OlbBlocks1,
+}
+
+/// A run of text inside a block. Only `text` is required, and the schema
+/// forbids anything else — notably there is no `"type": "text"` tag, which
+/// is the obvious thing to add and is rejected.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Inline {
+    pub text: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub marks: Vec<Mark>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub href: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mention: Option<String>,
+}
+
+impl Inline {
+    pub fn text(t: &str) -> Inline {
+        Inline { text: t.to_string(), marks: vec![], href: None, mention: None }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Mark {
+    Bold,
+    Italic,
+    Code,
+    Sup,
+    Sub,
+    Strike,
+}
+
+impl RichDoc {
+    /// A one-paragraph document, which is what most text from a plain field is.
+    pub fn paragraph(text: &str) -> RichDoc {
+        RichDoc {
+            format: RichFormat::OlbBlocks1,
+            blocks: vec![serde_json::json!({
+                "type": "paragraph",
+                "content": [Inline::text(text)],
+            })],
+            crdt_state: None,
+        }
+    }
+
+    pub fn empty() -> RichDoc {
+        RichDoc { format: RichFormat::OlbBlocks1, blocks: vec![], crdt_state: None }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Reference {
+    pub kind: ReferenceKind,
+    pub identifier: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub authors: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub year: Option<i64>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ReferenceKind {
+    Doi,
+    Url,
+    Isbn,
+    Olb,
+}
+
+/// The payload of a `project` record. Note what is NOT here: no `stage`, and
+/// no `ideas`. The stage is derived from transitions (§1 rule 3), and work
+/// lives in its own records rather than nested inside the project.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProjectFields {
+    pub title: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<RichDoc>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub field: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keywords: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub licence: Option<Licence>,
+    pub privacy: Privacy,
+    pub stages_enabled: Vec<Stage>,
+    pub settings: Settings,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub references: Vec<Reference>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_date: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected_duration: Option<Duration>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub team_size: Option<TeamSize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub existing_grant: Option<String>,
+}
+
+/// Why a proposed `stages_enabled` is not acceptable.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StagesInvalid {
+    Empty,
+    /// The schema says "in lifecycle order".
+    OutOfOrder,
+    Duplicate(Stage),
+    /// The schema says it "must end with 'published'".
+    DoesNotEndAtPublished,
+}
+
+/// Check a `stages_enabled` list against the schema's three stated rules.
+///
+/// The schema expresses uniqueness and non-emptiness but states the ordering
+/// and the final stage only in prose, so they are checked here — a project
+/// whose stages ran backwards would validate and then behave absurdly.
+pub fn validate_stages(stages: &[Stage]) -> Result<(), StagesInvalid> {
+    if stages.is_empty() {
+        return Err(StagesInvalid::Empty);
+    }
+    for (i, s) in stages.iter().enumerate() {
+        if stages[..i].contains(s) {
+            return Err(StagesInvalid::Duplicate(*s));
+        }
+        if i > 0 && *s <= stages[i - 1] {
+            return Err(StagesInvalid::OutOfOrder);
+        }
+    }
+    if stages.last() != Some(&Stage::Published) {
+        return Err(StagesInvalid::DoesNotEndAtPublished);
+    }
+    Ok(())
+}
+
+/// The payload of an `idea_contribution`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IdeaContributionFields {
+    pub kind: IdeaKind,
+    pub body: RichDoc,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reply_to: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub references: Vec<Reference>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum IdeaKind {
+    Proposal,
+    Comment,
+    Question,
+    Evidence,
+}
+
+/// The payload of a `membership`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MembershipFields {
+    pub member: String,
+    pub name: String,
+    pub role: Role,
+    pub status: MemberStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub invited_by: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub invite_kind: Option<InviteKind>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key_version: Option<u64>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MemberStatus {
+    Invited,
+    Active,
+    Removed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InviteKind {
+    ById,
+    ByCode,
+    JoinRequest,
+    Creator,
+}
+
 // ---------------------------------------------------------------------------
 // Stage machine (§4)
 // ---------------------------------------------------------------------------
@@ -700,6 +978,165 @@ mod tests {
     fn the_start_transition_validates() {
         validate_record(&envelope(RecordType::StageTransition,
                                   serde_json::to_value(start(Stage::Idea)).unwrap()));
+    }
+
+    // ---- field types ----
+
+    fn settings() -> Settings {
+        Settings {
+            anchoring: Anchoring::Batched,
+            merge_approvals: Some(1),
+            replica: Some(true),
+            allow_visitors: None,
+            auto_tags: Some(true),
+            reviewers_can_verify: None,
+        }
+    }
+
+    fn project_fields() -> ProjectFields {
+        ProjectFields {
+            title: "Bird Spotting Dhun Rajasthan".into(),
+            summary: Some("Counting nesting pairs across three districts.".into()),
+            description: Some(RichDoc::paragraph("Field survey over one season.")),
+            field: Some("Ecology".into()),
+            keywords: vec!["birds".into(), "rajasthan".into()],
+            licence: Some(Licence::CcBy40),
+            privacy: Privacy::Open,
+            stages_enabled: Stage::ALL.to_vec(),
+            settings: settings(),
+            references: vec![Reference {
+                kind: ReferenceKind::Doi,
+                identifier: "10.1000/example".into(),
+                title: Some("A prior survey".into()),
+                authors: vec!["Mehta, A.".into()],
+                year: Some(2024),
+            }],
+            start_date: Some("2026-11-01".into()),
+            expected_duration: Some(Duration::SixToTwelveMonths),
+            team_size: Some(TeamSize::TwoToFive),
+            existing_grant: None,
+        }
+    }
+
+    #[test]
+    fn our_project_record_validates_against_the_schema() {
+        let v = envelope(RecordType::Project, serde_json::to_value(project_fields()).unwrap());
+        // A project record's id must be the PROJECT id, not an object id.
+        let mut v = v;
+        v["id"] = json!("olb:proj:bkvglqcziuv4ig45");
+        validate_record(&v);
+    }
+
+    /// The schema's own negative test, from our side: a project record
+    /// carrying an object id is refused.
+    #[test]
+    fn a_project_record_with_an_object_id_is_refused() {
+        let v = envelope(RecordType::Project, serde_json::to_value(project_fields()).unwrap());
+        assert!(validator().iter_errors(&v).next().is_some(),
+                "olb:obj: id on a project record should not validate");
+    }
+
+    #[test]
+    fn enum_spellings_match_the_schema() {
+        assert_eq!(serde_json::to_value(Privacy::InviteOnly).unwrap(), json!("invite_only"));
+        assert_eq!(serde_json::to_value(Licence::CcBy40).unwrap(), json!("CC-BY-4.0"));
+        assert_eq!(serde_json::to_value(Anchoring::Milestones).unwrap(), json!("milestones"));
+        assert_eq!(serde_json::to_value(Duration::SixToTwelveMonths).unwrap(), json!("6_12m"));
+        assert_eq!(serde_json::to_value(TeamSize::OverFifteen).unwrap(), json!("gt_15"));
+        assert_eq!(serde_json::to_value(RichFormat::OlbBlocks1).unwrap(), json!("olb-blocks/1"));
+        assert_eq!(serde_json::to_value(MemberStatus::Removed).unwrap(), json!("removed"));
+        assert_eq!(serde_json::to_value(InviteKind::ByCode).unwrap(), json!("by_code"));
+        assert_eq!(serde_json::to_value(IdeaKind::Evidence).unwrap(), json!("evidence"));
+        assert_eq!(serde_json::to_value(Role::Reviewer).unwrap(), json!("reviewer"));
+    }
+
+    #[test]
+    fn our_idea_contribution_validates() {
+        let f = IdeaContributionFields {
+            kind: IdeaKind::Proposal,
+            body: RichDoc::paragraph("Survey the eastern district first."),
+            reply_to: None,
+            references: vec![],
+        };
+        validate_record(&envelope(RecordType::IdeaContribution, serde_json::to_value(f).unwrap()));
+    }
+
+    #[test]
+    fn our_membership_validates() {
+        let f = MembershipFields {
+            member: "b".repeat(64),
+            name: "Arjun Mehta".into(),
+            role: Role::Reviewer,
+            status: MemberStatus::Active,
+            invited_by: Some("dd028f673cc71c456c1eb6b253bf5a3b894a6fe6172d7391ce49ba440c205b33".into()),
+            invite_kind: Some(InviteKind::ById),
+            key_version: Some(1),
+        };
+        validate_record(&envelope(RecordType::Membership, serde_json::to_value(f).unwrap()));
+    }
+
+    // ---- stages_enabled invariants ----
+
+    #[test]
+    fn stages_enabled_must_end_at_published() {
+        assert_eq!(
+            validate_stages(&[Stage::Idea, Stage::Data]),
+            Err(StagesInvalid::DoesNotEndAtPublished)
+        );
+        assert!(validate_stages(&[Stage::Idea, Stage::Published]).is_ok());
+        assert!(validate_stages(&Stage::ALL).is_ok());
+    }
+
+    #[test]
+    fn stages_enabled_must_be_in_lifecycle_order() {
+        assert_eq!(
+            validate_stages(&[Stage::Hypothesis, Stage::Idea, Stage::Published]),
+            Err(StagesInvalid::OutOfOrder)
+        );
+    }
+
+    #[test]
+    fn stages_enabled_rejects_duplicates_and_emptiness() {
+        assert_eq!(
+            validate_stages(&[Stage::Idea, Stage::Idea, Stage::Published]),
+            Err(StagesInvalid::Duplicate(Stage::Idea))
+        );
+        assert_eq!(validate_stages(&[]), Err(StagesInvalid::Empty));
+    }
+
+    /// A project may skip the middle entirely, as long as it ends published.
+    #[test]
+    fn a_minimal_project_is_idea_then_published() {
+        let stages = [Stage::Idea, Stage::Published];
+        assert!(validate_stages(&stages).is_ok());
+        assert_eq!(next_enabled(Stage::Idea, &stages), Some(Stage::Published));
+    }
+
+    /// An inline carries no type tag. Adding `"type": "text"` is the obvious
+    /// thing to reach for and the schema rejects it outright
+    /// (`additionalProperties: false`), which cost a test cycle to find.
+    #[test]
+    fn an_inline_has_text_and_no_type_tag() {
+        let v = serde_json::to_value(Inline::text("hello")).unwrap();
+        assert_eq!(v, json!({"text": "hello"}));
+        assert!(v.get("type").is_none());
+        assert!(v.get("marks").is_none(), "empty marks are omitted");
+
+        let marked = Inline { text: "x".into(), marks: vec![Mark::Bold, Mark::Code],
+                              href: None, mention: None };
+        assert_eq!(serde_json::to_value(marked).unwrap(),
+                   json!({"text": "x", "marks": ["bold", "code"]}));
+    }
+
+    #[test]
+    fn a_rich_doc_paragraph_round_trips() {
+        let d = RichDoc::paragraph("hello");
+        let v = serde_json::to_value(&d).unwrap();
+        assert_eq!(v["format"], json!("olb-blocks/1"));
+        assert_eq!(v["blocks"][0]["type"], json!("paragraph"));
+        assert!(v.get("crdt_state").is_none(), "omitted when absent");
+        let back: RichDoc = serde_json::from_value(v).unwrap();
+        assert_eq!(back, d);
     }
 
     /// An agent author without its operator must be rejected — the schema

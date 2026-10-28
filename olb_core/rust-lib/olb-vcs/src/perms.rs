@@ -7,15 +7,11 @@
 //! Pure functions over role, privacy and context, so every row of the matrix
 //! can be tested without a store, a key or a project.
 
+// Privacy and IdeaKind are the model's, not re-declared here: two
+// definitions of the same enum is how a matrix and a record format drift
+// apart, and these are checked against each other on every call.
+pub use crate::model::{IdeaKind, Privacy};
 use crate::model::{Role, Stage};
-
-/// Project privacy, chosen once at creation and never changed (§2).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Privacy {
-    Open,
-    InviteOnly,
-    Private,
-}
 
 /// Who is asking. An external user is anyone with no membership record.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,16 +31,6 @@ impl Who {
             Who::External => None,
         }
     }
-}
-
-/// What kind of idea contribution. Reviewers and visitors may only comment,
-/// which is a limit on the KIND rather than on the action (§5).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum IdeaKind {
-    Proposal,
-    Comment,
-    Question,
-    Evidence,
 }
 
 /// The actions the matrix covers. Context that changes the answer is carried
