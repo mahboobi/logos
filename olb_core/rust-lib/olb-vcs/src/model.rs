@@ -571,6 +571,122 @@ pub enum Action {
 }
 
 // ---------------------------------------------------------------------------
+// Sealing a v2 record
+// ---------------------------------------------------------------------------
+
+/// Domain tag for a v2 record preimage.
+///
+/// Distinct from `hashing::RECORD` (v1) on purpose: the two formats must not
+/// be able to produce the same hash for the same bytes, or a v1 record could
+/// be presented as a v2 one.
+pub const RECORD_V2: &[u8] = b"olb.record.v2\0";
+
+/// The bytes a v2 record's id hashes and its signature covers.
+///
+/// Computed over the envelope WITHOUT `id`, `sig` or `co_sigs` — none of
+/// which exist yet when the preimage is formed, and all of which would make
+/// the hash depend on itself.
+fn record_preimage(
+    kind: RecordType,
+    project: &str,
+    version: u64,
+    authors: &[Actor],
+    parents: &[String],
+    created_at: &str,
+    fields: &serde_json::Map<String, serde_json::Value>,
+) -> Result<Vec<u8>, crate::VcsError> {
+    let body = serde_json::json!({
+        "type": kind,
+        "version": version,
+        "project": project,
+        "authors": authors,
+        "parents": parents,
+        "created_at": created_at,
+        "fields": fields,
+    });
+    crate::hashing::preimage(RECORD_V2, &body)
+}
+
+/// Build a signed v2 record.
+///
+/// The id and the signature cover the same preimage, so a record cannot be
+/// edited without either breaking its signature or becoming a different
+/// record. Version 1 establishes the object id; later versions keep it, which
+/// is why `id` is passed in rather than recomputed (docs/10 §3.1 — an object
+/// id is the hash of the FIRST version, and deriving it from a later one is
+/// always a bug).
+pub fn seal_record(
+    signing: &ed25519_dalek::SigningKey,
+    kind: RecordType,
+    project: &str,
+    version: u64,
+    id: Option<String>,
+    authors: Vec<Actor>,
+    parents: Vec<String>,
+    created_at: String,
+    fields: serde_json::Value,
+) -> Result<Envelope, crate::VcsError> {
+    use ed25519_dalek::Signer;
+
+    let fields = fields.as_object().cloned().unwrap_or_default();
+    let pre = record_preimage(
+        kind, project, version, &authors, &parents, &created_at, &fields,
+    )?;
+
+    let id = match id {
+        Some(existing) => existing,
+        None => {
+            if version != 1 {
+                return Err(crate::VcsError::Malformed(format!(
+                    "an object id comes from version 1, got version {version}"
+                )));
+            }
+            // A project record's id IS the project id (the schema requires
+            // `olb:proj:`), so the caller supplies it; everything else is
+            // identified by the hash of its first version.
+            crate::hashing::object_id_from_v1_hash(&crate::hashing::digest(&pre)).0
+        }
+    };
+
+    // Signed over the preimage directly: ed25519 hashes internally, so
+    // pre-hashing would buy nothing and risk a second construction.
+    let sig = signing.sign(&pre);
+
+    Ok(Envelope {
+        id,
+        kind,
+        version,
+        project: project.to_string(),
+        authors,
+        parents,
+        created_at,
+        fields,
+        sig: hex::encode(sig.to_bytes()),
+        co_sigs: vec![],
+    })
+}
+
+/// Check a v2 record's signature against `key`.
+pub fn verify_record(env: &Envelope, key: &ed25519_dalek::VerifyingKey) -> bool {
+    use ed25519_dalek::Verifier;
+
+    let Ok(pre) = record_preimage(
+        env.kind,
+        &env.project,
+        env.version,
+        &env.authors,
+        &env.parents,
+        &env.created_at,
+        &env.fields,
+    ) else {
+        return false;
+    };
+    let Ok(raw) = hex::decode(&env.sig) else { return false };
+    let Ok(bytes) = <[u8; 64]>::try_from(raw.as_slice()) else { return false };
+    key.verify(&pre, &ed25519_dalek::Signature::from_bytes(&bytes)).is_ok()
+}
+
+// ---------------------------------------------------------------------------
 // Stage machine (§4)
 // ---------------------------------------------------------------------------
 
@@ -1242,6 +1358,139 @@ mod tests {
         assert!(v.get("crdt_state").is_none(), "omitted when absent");
         let back: RichDoc = serde_json::from_value(v).unwrap();
         assert_eq!(back, d);
+    }
+
+    // ---- sealing ----
+
+    fn key() -> ed25519_dalek::SigningKey {
+        // Fixed bytes so the test is deterministic; never a real key.
+        ed25519_dalek::SigningKey::from_bytes(&[7u8; 32])
+    }
+
+    fn author_of(k: &ed25519_dalek::SigningKey) -> Actor {
+        Actor {
+            key: hex::encode(k.verifying_key().to_bytes()),
+            kind: ActorKind::Member,
+            name: Some("Imtiyaz".into()),
+            operator: None,
+        }
+    }
+
+    #[test]
+    fn a_sealed_record_verifies_and_validates() {
+        let k = key();
+        let env = seal_record(
+            &k,
+            RecordType::IdeaContribution,
+            "olb:proj:bkvglqcziuv4ig45",
+            1,
+            None,
+            vec![author_of(&k)],
+            vec![],
+            "2026-10-28T13:20:00Z".into(),
+            serde_json::to_value(IdeaContributionFields {
+                kind: IdeaKind::Proposal,
+                body: RichDoc::paragraph("Start with the eastern district."),
+                reply_to: None,
+                references: vec![],
+            })
+            .unwrap(),
+        )
+        .unwrap();
+
+        assert!(env.id.starts_with("olb:obj:"), "got {}", env.id);
+        assert!(verify_record(&env, &k.verifying_key()));
+        validate_record(&serde_json::to_value(&env).unwrap());
+    }
+
+    /// The id and the signature cover the same bytes, so editing a record
+    /// breaks its signature rather than quietly changing its meaning.
+    #[test]
+    fn tampering_with_a_sealed_record_breaks_its_signature() {
+        let k = key();
+        let mut env = seal_record(
+            &k, RecordType::StageTransition, "olb:proj:bkvglqcziuv4ig45", 1, None,
+            vec![author_of(&k)], vec![], "2026-10-28T13:20:00Z".into(),
+            serde_json::to_value(start(Stage::Idea)).unwrap(),
+        ).unwrap();
+        assert!(verify_record(&env, &k.verifying_key()));
+
+        env.fields.insert("to".into(), json!("published"));
+        assert!(!verify_record(&env, &k.verifying_key()),
+                "a changed field must invalidate the signature");
+    }
+
+    #[test]
+    fn another_key_does_not_verify() {
+        let k = key();
+        let env = seal_record(
+            &k, RecordType::StageTransition, "olb:proj:bkvglqcziuv4ig45", 1, None,
+            vec![author_of(&k)], vec![], "2026-10-28T13:20:00Z".into(),
+            serde_json::to_value(start(Stage::Idea)).unwrap(),
+        ).unwrap();
+        let other = ed25519_dalek::SigningKey::from_bytes(&[9u8; 32]);
+        assert!(!verify_record(&env, &other.verifying_key()));
+    }
+
+    /// Identical content from two members gives the same id, so creation can
+    /// never conflict — the v1 property, kept.
+    #[test]
+    fn the_id_is_the_hash_of_the_content() {
+        let k = key();
+        let make = || seal_record(
+            &k, RecordType::IdeaContribution, "olb:proj:x", 1, None,
+            vec![author_of(&k)], vec![], "2026-10-28T13:20:00Z".into(),
+            serde_json::to_value(IdeaContributionFields {
+                kind: IdeaKind::Comment,
+                body: RichDoc::paragraph("same"),
+                reply_to: None, references: vec![],
+            }).unwrap(),
+        ).unwrap();
+        assert_eq!(make().id, make().id);
+
+        let different = seal_record(
+            &k, RecordType::IdeaContribution, "olb:proj:x", 1, None,
+            vec![author_of(&k)], vec![], "2026-10-28T13:20:00Z".into(),
+            serde_json::to_value(IdeaContributionFields {
+                kind: IdeaKind::Comment,
+                body: RichDoc::paragraph("different"),
+                reply_to: None, references: vec![],
+            }).unwrap(),
+        ).unwrap();
+        assert_ne!(make().id, different.id);
+    }
+
+    #[test]
+    fn a_v2_preimage_cannot_collide_with_a_v1_one() {
+        assert_ne!(RECORD_V2, crate::hashing::RECORD);
+        let body = b"same bytes";
+        assert_ne!(
+            crate::hashing::tagged(RECORD_V2, body),
+            crate::hashing::tagged(crate::hashing::RECORD, body)
+        );
+    }
+
+    /// An object id is the hash of version 1. Asking seal_record to mint one
+    /// for a later version is a bug, not a fallback.
+    #[test]
+    fn a_later_version_must_carry_its_object_id() {
+        let k = key();
+        let err = seal_record(
+            &k, RecordType::IdeaContribution, "olb:proj:x", 2, None,
+            vec![author_of(&k)], vec![], "2026-10-28T13:20:00Z".into(),
+            json!({"kind": "comment", "body": {"format":"olb-blocks/1","blocks":[]}}),
+        );
+        assert!(err.is_err(), "version 2 with no id should be refused");
+
+        // With the id carried over it is fine.
+        let ok = seal_record(
+            &k, RecordType::IdeaContribution, "olb:proj:x", 2,
+            Some("olb:obj:abc".into()),
+            vec![author_of(&k)], vec![], "2026-10-28T13:20:00Z".into(),
+            json!({"kind": "comment", "body": {"format":"olb-blocks/1","blocks":[]}}),
+        ).unwrap();
+        assert_eq!(ok.id, "olb:obj:abc");
+        assert_eq!(ok.version, 2);
     }
 
     // ---- history events (§6) ----
