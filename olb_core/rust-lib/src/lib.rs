@@ -151,6 +151,15 @@ pub trait OlbCoreModule: Send + 'static {
     /// Invites that have arrived and are waiting on a decision.
     fn invites(&mut self) -> String;
 
+    /// Everything a full refresh needs, in ONE reply.
+    ///
+    /// The UI used to fetch this as eight separate synchronous calls. Each
+    /// call across the IPC seam can block the UI thread indefinitely — the
+    /// 20 s `Timeout` does not fire from inside a QtRO handler (docs/08
+    /// R21) — so the number of calls per refresh was the number of chances
+    /// to freeze the app. The bytes are the same; the exposure is an eighth.
+    fn snapshot(&mut self) -> String;
+
     /// Accept one. Installs the key and starts syncing the project.
     fn accept_invite(&mut self, invite_id: String) -> String;
 
@@ -1421,6 +1430,29 @@ impl OlbCoreModule for OlbCore {
             .to_string(),
             Err(e) => record::err("offline", &format!("could not send the invite: {e:?}")),
         }
+    }
+
+    fn snapshot(&mut self) -> String {
+        // Each of these already returns a JSON document as a string; parse
+        // them back so the reply is one object rather than a bag of strings
+        // the view would have to unwrap twice. A method whose output is not
+        // valid JSON becomes null here rather than poisoning the whole
+        // snapshot — one broken section must not blank every screen.
+        let v = |s: String| {
+            serde_json::from_str::<serde_json::Value>(&s).unwrap_or(serde_json::Value::Null)
+        };
+        serde_json::json!({
+            "board":     v(self.board()),
+            "notes":     v(self.notes()),
+            "projects":  v(self.projects()),
+            "profile":   v(self.profile()),
+            "history":   v(self.history()),
+            "members":   v(self.members()),
+            "invites":   v(self.invites()),
+            "lockState": v(self.lock_state()),
+            "fixtures":  self.fixtures_enabled(),
+        })
+        .to_string()
     }
 
     fn invites(&mut self) -> String {

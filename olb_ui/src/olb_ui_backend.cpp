@@ -6,6 +6,7 @@
 
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonArray>
 #include <QJsonParseError>
 #include <QUrl>
 
@@ -64,15 +65,16 @@ void OlbUiBackend::refreshLockState()
 void OlbUiBackend::createPassphrase(QString passphrase)
 {
     setLastActionResult(modules().olb_core.create_passphrase(passphrase));
-    setLockState(modules().olb_core.lock_state());
+    // refreshBoard() carries lockState in its snapshot, so asking for it
+    // again here would be one more call that can hang for nothing.
     refreshBoard();
 }
 
 void OlbUiBackend::unlockStore(QString passphrase)
 {
     setLastActionResult(modules().olb_core.unlock(passphrase));
-    setLockState(modules().olb_core.lock_state());
-    // Unlocking is the moment everything becomes readable at once.
+    // Unlocking is the moment everything becomes readable at once, and the
+    // snapshot includes the new lock state.
     refreshBoard();
 }
 
@@ -96,16 +98,58 @@ void OlbUiBackend::acceptInvite(QString inviteId)
     refreshBoard();
 }
 
+/// Re-serialise one section of a snapshot back to the compact JSON string its
+/// PROP carries. Absent or null sections become "", which every screen
+/// already treats as "nothing yet".
+static QString section(const QJsonObject &snap, const char *key)
+{
+    const QJsonValue v = snap.value(QLatin1String(key));
+    if (v.isUndefined() || v.isNull())
+        return QString();
+    if (v.isObject())
+        return QString::fromUtf8(QJsonDocument(v.toObject()).toJson(QJsonDocument::Compact));
+    if (v.isArray())
+        return QString::fromUtf8(QJsonDocument(v.toArray()).toJson(QJsonDocument::Compact));
+    return v.toVariant().toString();
+}
+
 void OlbUiBackend::refreshBoard()
 {
-    setBoard(modules().olb_core.board());
-    setFixtures(modules().olb_core.fixtures_enabled());
-    setNotes(modules().olb_core.notes());
-    setProjects(modules().olb_core.projects());
-    setProfile(modules().olb_core.profile());
-    setHistory(modules().olb_core.history());
-    setMembers(modules().olb_core.members());
-    setInvites(modules().olb_core.invites());
+    // ONE synchronous round-trip, not eight.
+    //
+    // Every call across this seam can block the UI thread indefinitely: the
+    // 20 s Timeout in logos_mode.h does not fire from inside a QtRO handler,
+    // because the call is re-entrant on the event loop it needs in order to
+    // receive its own reply (docs/08 R21). On 28 Oct that froze the whole
+    // app for over six minutes against an idle olb_core. The number of calls
+    // per refresh is therefore the number of chances to freeze, and this was
+    // the hottest path in the app — every store change runs it.
+    //
+    // The PROPs are unchanged, so no QML moves; only the fetching collapses.
+    const QString snapJson = modules().olb_core.snapshot();
+
+    QJsonParseError err{};
+    const QJsonDocument doc = QJsonDocument::fromJson(snapJson.toUtf8(), &err);
+    if (err.error != QJsonParseError::NoError || !doc.isObject()) {
+        // A snapshot we cannot read must not wipe every screen to blank.
+        // Leave the PROPs holding the last good values and say so.
+        setLastActionResult(QStringLiteral(
+            "{\"ok\":false,\"error\":{\"code\":\"internal\","
+            "\"message\":\"the board could not be read; showing the last "
+            "known state\"}}"));
+        return;
+    }
+    const QJsonObject snap = doc.object();
+
+    setBoard(section(snap, "board"));
+    setNotes(section(snap, "notes"));
+    setProjects(section(snap, "projects"));
+    setProfile(section(snap, "profile"));
+    setHistory(section(snap, "history"));
+    setMembers(section(snap, "members"));
+    setInvites(section(snap, "invites"));
+    setLockState(section(snap, "lockState"));
+    setFixtures(snap.value(QStringLiteral("fixtures")).toBool(false));
 }
 
 void OlbUiBackend::openRecord(QString recordId)
