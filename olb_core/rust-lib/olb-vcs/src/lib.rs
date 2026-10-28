@@ -17,6 +17,7 @@ pub mod dag;
 pub mod hashing;
 pub mod merge;
 pub mod model;
+pub mod perms;
 pub mod merkle;
 pub mod record;
 pub mod stages;
