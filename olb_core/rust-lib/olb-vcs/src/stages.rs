@@ -221,3 +221,32 @@ mod tests {
         assert_eq!(stage_needs("Peer review"), "");
     }
 }
+
+#[cfg(test)]
+mod migration_tests {
+    use super::*;
+    use serde_json::json;
+
+    /// Projects created before `stage` existed have no such field, and are
+    /// never migrated. Position is derived from the work, so an old project
+    /// must still report a sensible stage rather than 0 or a panic.
+    #[test]
+    fn a_project_with_no_stage_field_still_reports_one() {
+        let legacy = json!({
+            "id": "proj-18e2012cb69b69d0",
+            "title": "Test Project Data Collection",
+            "stages": ["Idea", "Hypothesis", "Funding", "Experiments", "Data", "Publish"],
+            "ideas": [],
+        });
+        assert!(legacy.get("stage").is_none(), "precondition: no stage field");
+        assert_eq!(reached_stage(&legacy), 1);
+    }
+
+    /// Nor does a project that predates `stages` — the fallback is all six.
+    #[test]
+    fn a_project_with_neither_stage_nor_stages_is_at_idea() {
+        let ancient = json!({"id": "p", "title": "old", "ideas": []});
+        assert_eq!(reached_stage(&ancient), 1);
+        assert_eq!(stages_of(&ancient)[0], "Idea");
+    }
+}
