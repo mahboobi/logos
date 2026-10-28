@@ -48,6 +48,28 @@ pub fn default_dir(profile: &str) -> PathBuf {
         .join(profile)
 }
 
+/// Whether this store has any state written yet.
+///
+/// Distinguishes a first run from a store that already holds records, which
+/// decides whether a new passphrase may mint a key or has to adopt the
+/// existing one.
+pub fn has_state(dir: &Path) -> bool {
+    dir.join("state.json").exists()
+}
+
+/// Whether `key` actually decrypts this store's state.
+///
+/// Checked before wrapping an existing key under a new passphrase. The key
+/// being *available* is not the same as it being the *right* one, and
+/// wrapping the wrong one hands someone a passphrase that opens nothing
+/// while their records stay sealed under a key nobody holds.
+pub fn state_readable(dir: &Path, key: &[u8; 32]) -> bool {
+    matches!(
+        vault::read_sealed(&dir.join("state.json"), key, AAD_STATE),
+        Ok(Some(_))
+    )
+}
+
 /// Commits, records and refs, encrypted at rest, indexed in memory.
 ///
 /// The whole log is read into memory at open. At OLB's scale — thousands of
@@ -436,5 +458,37 @@ mod tests {
         assert_eq!(s.read_state().unwrap(), None);
         s.write_state(&serde_json::json!({"projects": []})).unwrap();
         assert!(s.read_state().unwrap().is_some());
+    }
+}
+
+#[cfg(test)]
+mod readable_tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn tmpdir(tag: &str) -> PathBuf {
+        let p = std::env::temp_dir().join(format!(
+            "olb-readable-{tag}-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = std::fs::remove_dir_all(&p);
+        p
+    }
+
+    #[test]
+    fn state_readable_only_with_the_right_key() {
+        let dir = tmpdir("rk");
+        let key = [4u8; 32];
+
+        assert!(!has_state(&dir), "nothing written yet");
+        assert!(!state_readable(&dir, &key));
+
+        let store = DurableStore::open(dir.clone(), key).unwrap();
+        store.write_state(&serde_json::json!({"projects": []})).unwrap();
+
+        assert!(has_state(&dir));
+        assert!(state_readable(&dir, &key), "the right key reads it");
+        assert!(!state_readable(&dir, &[5u8; 32]), "a wrong key must not");
     }
 }

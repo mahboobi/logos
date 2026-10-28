@@ -117,10 +117,38 @@ fn check_strength(passphrase: &str) -> Result<()> {
 
 /// Create the vault: mint a store key, wrap it under the passphrase.
 ///
+/// Only correct for a store with nothing in it. A store that already holds
+/// records is sealed under some other key, and a freshly minted one cannot
+/// read a byte of it — see `adopt`.
+///
 /// Refuses if one already exists, rather than overwriting. Overwriting a
 /// keyvault silently orphans the store it was protecting, which is the same
 /// class of mistake that already cost one store on this project.
 pub fn create(dir: &Path, passphrase: &str) -> Result<Zeroizing<[u8; 32]>> {
+    let mut store_key = Zeroizing::new([0u8; 32]);
+    rand::rngs::OsRng.fill_bytes(store_key.as_mut());
+    wrap_new(dir, passphrase, &store_key)?;
+    Ok(store_key)
+}
+
+/// Put a passphrase in front of a store key that already exists.
+///
+/// This is the path for a store that was created under `OLB_STORE_KEY_HEX`
+/// or an OS keychain and is now being moved to passphrase mode. `create`
+/// would mint a fresh key and wrap that, leaving the person with a
+/// passphrase that opens an empty-looking notebook while every record they
+/// ever wrote sits on disk, correctly encrypted, under a key nothing is
+/// holding any more. The store key is unchanged, so nothing has to be
+/// re-encrypted and every existing commit stays readable.
+pub fn adopt(dir: &Path, passphrase: &str, store_key: &[u8; 32]) -> Result<()> {
+    wrap_new(dir, passphrase, store_key)
+}
+
+/// Wrap `store_key` under a passphrase and write a NEW vault.
+///
+/// Refuses when one is already present: replacing a vault is `change`,
+/// which proves possession of the current passphrase first.
+fn wrap_new(dir: &Path, passphrase: &str, store_key: &[u8; 32]) -> Result<()> {
     if exists(dir) {
         return Err(KeyError::Refused(
             "a passphrase is already set for this store; changing it is \
@@ -130,15 +158,17 @@ pub fn create(dir: &Path, passphrase: &str) -> Result<Zeroizing<[u8; 32]>> {
     }
     check_strength(passphrase)?;
     std::fs::create_dir_all(dir).map_err(|e| KeyError::Io(e.to_string()))?;
+    write_vault(dir, passphrase, store_key)
+}
 
+/// Derive a fresh KEK from a new random salt and seal `store_key` under it.
+fn write_vault(dir: &Path, passphrase: &str, store_key: &[u8; 32]) -> Result<()> {
     let mut salt = [0u8; 16];
     rand::rngs::OsRng.fill_bytes(&mut salt);
-    let mut store_key = Zeroizing::new([0u8; 32]);
-    rand::rngs::OsRng.fill_bytes(store_key.as_mut());
 
     let kdf = KdfParams::default();
     let kek = derive(passphrase, &salt, &kdf)?;
-    let wrapped = vault::seal(&kek, WRAP_AAD, store_key.as_ref())?;
+    let wrapped = vault::seal(&kek, WRAP_AAD, store_key.as_slice())?;
 
     let doc = KeyVault {
         v: 1,
@@ -147,8 +177,7 @@ pub fn create(dir: &Path, passphrase: &str) -> Result<Zeroizing<[u8; 32]>> {
         wrapped: hex::encode(&wrapped),
     };
     let bytes = serde_json::to_vec_pretty(&doc).map_err(|e| KeyError::Malformed(e.to_string()))?;
-    write_atomic(&dir.join(VAULT_FILE), &bytes)?;
-    Ok(store_key)
+    write_atomic(&dir.join(VAULT_FILE), &bytes)
 }
 
 /// Unlock: derive the KEK and unwrap the store key.
@@ -192,21 +221,7 @@ pub fn unlock(dir: &Path, passphrase: &str) -> Result<Zeroizing<[u8; 32]>> {
 pub fn change(dir: &Path, current: &str, new: &str) -> Result<()> {
     let store_key = unlock(dir, current)?;
     check_strength(new)?;
-
-    let mut salt = [0u8; 16];
-    rand::rngs::OsRng.fill_bytes(&mut salt);
-    let kdf = KdfParams::default();
-    let kek = derive(new, &salt, &kdf)?;
-    let wrapped = vault::seal(&kek, WRAP_AAD, store_key.as_ref())?;
-
-    let doc = KeyVault {
-        v: 1,
-        kdf,
-        salt: hex::encode(salt),
-        wrapped: hex::encode(&wrapped),
-    };
-    let bytes = serde_json::to_vec_pretty(&doc).map_err(|e| KeyError::Malformed(e.to_string()))?;
-    write_atomic(&dir.join(VAULT_FILE), &bytes)
+    write_vault(dir, new, &store_key)
 }
 
 /// Temp-then-rename. A half-written keyvault is an unopenable store, so the
@@ -380,5 +395,71 @@ mod tests {
         let made = create(&d, "correct horse battery staple").unwrap();
         let got = unlock(&d, "correct horse battery staple").unwrap();
         assert_eq!(*made, *got);
+    }
+}
+
+#[cfg(test)]
+mod adopt_tests {
+    use super::*;
+
+    fn tmpdir(tag: &str) -> std::path::PathBuf {
+        let p = std::env::temp_dir().join(format!(
+            "olb-adopt-{tag}-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = std::fs::remove_dir_all(&p);
+        p
+    }
+
+    /// The case that matters: a store sealed under some other key, then moved
+    /// to passphrase mode. Unlocking must hand back THAT key, not a new one,
+    /// or every existing record becomes unreadable.
+    #[test]
+    fn adopt_preserves_the_existing_store_key() {
+        let dir = tmpdir("keeps");
+        let existing = [7u8; 32];
+
+        adopt(dir.as_path(), "a few ordinary words", &existing).unwrap();
+        let opened = unlock(dir.as_path(), "a few ordinary words").unwrap();
+
+        assert_eq!(&*opened, &existing, "adopt must wrap the key it was given");
+    }
+
+    /// A passphrase change after adopting still keeps the same key, so data
+    /// written before either step stays readable.
+    #[test]
+    fn change_after_adopt_keeps_the_same_key() {
+        let dir = tmpdir("change");
+        let existing = [9u8; 32];
+
+        adopt(dir.as_path(), "the first long phrase", &existing).unwrap();
+        change(dir.as_path(), "the first long phrase", "the second long phrase").unwrap();
+
+        let opened = unlock(dir.as_path(), "the second long phrase").unwrap();
+        assert_eq!(&*opened, &existing);
+    }
+
+    /// Never silently replace a vault — that is how a store gets orphaned.
+    #[test]
+    fn adopt_refuses_when_a_vault_already_exists() {
+        let dir = tmpdir("exists");
+        adopt(dir.as_path(), "a few ordinary words", &[1u8; 32]).unwrap();
+
+        let err = adopt(dir.as_path(), "another long phrase", &[2u8; 32]).unwrap_err();
+        assert!(matches!(err, KeyError::Refused(_)), "got {err:?}");
+        // The original key still opens it.
+        assert_eq!(
+            &*unlock(dir.as_path(), "a few ordinary words").unwrap(),
+            &[1u8; 32]
+        );
+    }
+
+    #[test]
+    fn adopt_still_enforces_the_length_floor() {
+        let dir = tmpdir("floor");
+        let err = adopt(dir.as_path(), "short", &[3u8; 32]).unwrap_err();
+        assert!(matches!(err, KeyError::Refused(_)), "got {err:?}");
+        assert!(!exists(dir.as_path()), "a refused adopt must not write a vault");
     }
 }

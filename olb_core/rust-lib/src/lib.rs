@@ -1078,9 +1078,35 @@ impl OlbCoreModule for OlbCore {
     fn create_passphrase(&mut self, passphrase: String) -> String {
         let profile = profile_name();
         let dir = olb_keys::store::default_dir(&profile);
-        let key = match olb_keys::passphrase::create(&dir, &passphrase) {
-            Ok(k) => k,
-            Err(e) => return record::err("refused", &e.to_string()),
+
+        // A store that already holds records is sealed under a key that came
+        // from the OS keychain or OLB_STORE_KEY_HEX. Minting a fresh key here
+        // and wrapping that would leave the person with a passphrase that
+        // opens an empty-looking notebook while every record they ever wrote
+        // sits on disk, correctly encrypted, under a key nothing holds any
+        // more. So: adopt the existing key when it is the one that reads this
+        // store, mint only for a store with nothing in it, and refuse outright
+        // rather than orphan data we cannot currently read.
+        let key = if olb_keys::store::has_state(&dir) {
+            match olb_keys::keyring::peek_key(&profile).ok().flatten() {
+                Some(k) if olb_keys::store::state_readable(&dir, k.as_ref()) => {
+                    if let Err(e) = olb_keys::passphrase::adopt(&dir, &passphrase, k.as_ref()) {
+                        return record::err("refused", &e.to_string());
+                    }
+                    k
+                }
+                _ => {
+                    return record::err(
+                        "refused",
+                        "this store already holds records, and the key that can read them                          is not available right now — so a passphrase set here would not                          open them. Make the existing store key available first (the OS                          keychain, or OLB_STORE_KEY_HEX for this profile) and try again.                          Nothing has been changed.",
+                    )
+                }
+            }
+        } else {
+            match olb_keys::passphrase::create(&dir, &passphrase) {
+                Ok(k) => k,
+                Err(e) => return record::err("refused", &e.to_string()),
+            }
         };
         match open_with(&profile, &key) {
             Ok(()) => {
