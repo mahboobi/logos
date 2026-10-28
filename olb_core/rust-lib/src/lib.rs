@@ -1089,8 +1089,8 @@ impl OlbCoreModule for OlbCore {
         // rather than orphan data we cannot currently read.
         let key = if olb_keys::store::has_state(&dir) {
             match olb_keys::keyring::peek_key(&profile).ok().flatten() {
-                Some(k) if olb_keys::store::state_readable(&dir, k.as_ref()) => {
-                    if let Err(e) = olb_keys::passphrase::adopt(&dir, &passphrase, k.as_ref()) {
+                Some(k) if olb_keys::store::state_readable(&dir, &k) => {
+                    if let Err(e) = olb_keys::passphrase::adopt(&dir, &passphrase, &k) {
                         return record::err("refused", &e.to_string());
                     }
                     k

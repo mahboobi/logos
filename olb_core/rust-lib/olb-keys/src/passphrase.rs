@@ -463,3 +463,29 @@ mod adopt_tests {
         assert!(!exists(dir.as_path()), "a refused adopt must not write a vault");
     }
 }
+
+#[cfg(test)]
+mod coercion_tests {
+    use super::*;
+
+    /// `keyring::peek_key` hands back a `Zeroizing<[u8; 32]>`, and callers
+    /// pass it straight to `adopt` / `state_readable`. `.as_ref()` on that
+    /// cannot infer `&[u8; 32]`, so the call sites rely on deref coercion —
+    /// which is easy to break and only shows up in the module crate's nix
+    /// build. This compiles the exact shape here, where it costs seconds.
+    #[test]
+    fn a_zeroizing_key_coerces_at_the_call_sites() {
+        let dir = std::env::temp_dir().join(format!(
+            "olb-coerce-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let key: Zeroizing<[u8; 32]> = Zeroizing::new([6u8; 32]);
+
+        adopt(&dir, "a few ordinary words", &key).unwrap();
+        // No state has been written, so the key cannot read one yet.
+        assert!(!crate::store::state_readable(&dir, &key));
+        assert_eq!(&*unlock(&dir, "a few ordinary words").unwrap(), &*key);
+    }
+}
