@@ -1,0 +1,65 @@
+[
+  {
+    "commit": "1a2b3c4",
+    "at": "2026-09-10T11:00:00+05:30",
+    "actor": {
+      "key": "a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4",
+      "kind": "member",
+      "name": "Nisha Kumar"
+    },
+    "action": "stage_moved",
+    "stage": "experiments",
+    "target": {
+      "type": "stage_transition",
+      "id": "olb:obj:st-4",
+      "title": "Funding → Experiments"
+    },
+    "protocol": null,
+    "detail": "Grant funded: 6,000 of 6,000",
+    "anchor": {
+      "state": "anchored",
+      "batch": 77
+    }
+  },
+  {
+    "commit": "a41c9e2",
+    "at": "2026-10-27T07:50:00+05:30",
+    "actor": {
+      "key": "a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4",
+      "kind": "member",
+      "name": "Nisha Kumar"
+    },
+    "action": "submission_added",
+    "stage": "experiments",
+    "target": {
+      "type": "submission",
+      "id": "olb:obj:sub-1284",
+      "title": "Indian peafowl · 3",
+      "version": 1
+    },
+    "protocol": "olb:obj:prot-sighting",
+    "anchor": {
+      "state": "pending"
+    }
+  },
+  {
+    "commit": "5d6e7f8",
+    "at": "2026-10-27T10:00:00+05:30",
+    "actor": {
+      "key": "c3d4e5f6c3d4e5f6c3d4e5f6c3d4e5f6c3d4e5f6c3d4e5f6c3d4e5f6c3d4e5f6",
+      "kind": "member",
+      "name": "Rahul Desai"
+    },
+    "action": "submission_reviewed",
+    "stage": "experiments",
+    "target": {
+      "type": "review",
+      "id": "olb:obj:rev-1",
+      "title": "Flagged · Photo unclear"
+    },
+    "protocol": "olb:obj:prot-sighting",
+    "anchor": {
+      "state": "pending"
+    }
+  }
+]

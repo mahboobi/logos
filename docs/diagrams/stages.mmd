@@ -1,0 +1,16 @@
+stateDiagram-v2
+  direction LR
+  [*] --> Idea : project created
+  Idea --> Hypothesis : admin · 1+ idea contribution
+  Hypothesis --> Funding : admin · hypothesis committed
+  Hypothesis --> Experiments : funding not enabled (skip)
+  Funding --> Experiments : grant funded, or admin override with reason
+  Experiments --> Data : 1+ protocol published and 1+ verified submission
+  Data --> Published : admin · manuscript ready, snapshots frozen, credits settled
+  Published --> [*]
+  note right of Published
+    Final. A revised paper is a new
+    publication version. Any earlier stage
+    can be reopened by an admin with a
+    written reason, never from Published.
+  end note

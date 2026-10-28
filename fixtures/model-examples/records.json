@@ -1,0 +1,1013 @@
+[
+  {
+    "id": "olb:proj:wildlife",
+    "type": "project",
+    "version": 1,
+    "project": "olb:proj:wildlife",
+    "authors": [
+      {
+        "key": "a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4",
+        "kind": "member",
+        "name": "Nisha Kumar"
+      }
+    ],
+    "parents": [],
+    "created_at": "2026-08-01T09:00:00+05:30",
+    "fields": {
+      "title": "Urban wildlife sightings",
+      "summary": "Do lake edges in central Bengaluru hold more bird species than park lawns?",
+      "description": {
+        "format": "olb-blocks/1",
+        "blocks": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "text": "A citizen-science survey of four lakes and parks, using photo-verified sightings."
+              }
+            ]
+          }
+        ]
+      },
+      "field": "Ecology",
+      "keywords": [
+        "urban ecology",
+        "birds",
+        "citizen science"
+      ],
+      "licence": "CC-BY-4.0",
+      "privacy": "open",
+      "stages_enabled": [
+        "idea",
+        "hypothesis",
+        "funding",
+        "experiments",
+        "data",
+        "published"
+      ],
+      "start_date": "2026-08-01",
+      "expected_duration": "6_12m",
+      "team_size": "6_15",
+      "settings": {
+        "anchoring": "batched",
+        "merge_approvals": 1,
+        "replica": true,
+        "allow_visitors": true,
+        "auto_tags": true,
+        "reviewers_can_verify": false,
+        "media_replication": "originals_on_replicas"
+      },
+      "references": [
+        {
+          "kind": "doi",
+          "identifier": "10.0000/example.0001",
+          "title": "[Placeholder reference]"
+        }
+      ]
+    },
+    "sig": "ed25519:demo-signature"
+  },
+  {
+    "id": "olb:obj:mem-aisha",
+    "type": "membership",
+    "version": 1,
+    "project": "olb:proj:wildlife",
+    "authors": [
+      {
+        "key": "a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4",
+        "kind": "member",
+        "name": "Nisha Kumar"
+      }
+    ],
+    "parents": [],
+    "created_at": "2026-08-02T10:00:00+05:30",
+    "fields": {
+      "member": "b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5",
+      "name": "Aisha Farooq",
+      "role": "member",
+      "status": "active",
+      "invited_by": "a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4",
+      "invite_kind": "by_id",
+      "key_version": 1
+    },
+    "sig": "ed25519:demo-signature"
+  },
+  {
+    "id": "olb:obj:join-kiran",
+    "type": "join_request",
+    "version": 1,
+    "project": "olb:proj:wildlife",
+    "authors": [
+      {
+        "key": "d4e5f6a7d4e5f6a7d4e5f6a7d4e5f6a7d4e5f6a7d4e5f6a7d4e5f6a7d4e5f6a7",
+        "kind": "external",
+        "name": "Kiran S."
+      }
+    ],
+    "parents": [],
+    "created_at": "2026-08-05T18:20:00+05:30",
+    "fields": {
+      "requester": "d4e5f6a7d4e5f6a7d4e5f6a7d4e5f6a7d4e5f6a7d4e5f6a7d4e5f6a7d4e5f6a7",
+      "name": "Kiran S.",
+      "orcid": null,
+      "note": "I survey Ulsoor lake every weekend.",
+      "status": "approved",
+      "decided_by": "a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4"
+    },
+    "sig": "ed25519:demo-signature"
+  },
+  {
+    "id": "olb:obj:st-1",
+    "type": "stage_transition",
+    "version": 1,
+    "project": "olb:proj:wildlife",
+    "authors": [
+      {
+        "key": "a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4",
+        "kind": "member",
+        "name": "Nisha Kumar"
+      }
+    ],
+    "parents": [],
+    "created_at": "2026-08-01T09:00:00+05:30",
+    "fields": {
+      "from": null,
+      "to": "idea",
+      "direction": "start",
+      "checks": [
+        {
+          "rule": "project_created",
+          "passed": true
+        }
+      ]
+    },
+    "sig": "ed25519:demo-signature"
+  },
+  {
+    "id": "olb:obj:st-4",
+    "type": "stage_transition",
+    "version": 1,
+    "project": "olb:proj:wildlife",
+    "authors": [
+      {
+        "key": "a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4",
+        "kind": "member",
+        "name": "Nisha Kumar"
+      }
+    ],
+    "parents": [],
+    "created_at": "2026-09-10T11:00:00+05:30",
+    "fields": {
+      "from": "funding",
+      "to": "experiments",
+      "direction": "forward",
+      "checks": [
+        {
+          "rule": "grant_funded",
+          "passed": true,
+          "detail": "6,000 of 6,000 pledged"
+        }
+      ]
+    },
+    "sig": "ed25519:demo-signature"
+  },
+  {
+    "id": "olb:obj:idea-7",
+    "type": "idea_contribution",
+    "version": 1,
+    "project": "olb:proj:wildlife",
+    "authors": [
+      {
+        "key": "b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5",
+        "kind": "member",
+        "name": "Aisha Farooq"
+      }
+    ],
+    "parents": [],
+    "created_at": "2026-08-03T08:10:00+05:30",
+    "fields": {
+      "kind": "proposal",
+      "reply_to": null,
+      "body": {
+        "format": "olb-blocks/1",
+        "blocks": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "text": "Lake edges have reeds and shallow water; lawns are mown weekly. I expect more bird species at the edges."
+              }
+            ]
+          }
+        ]
+      },
+      "references": []
+    },
+    "sig": "ed25519:demo-signature"
+  },
+  {
+    "id": "olb:obj:idea-8",
+    "type": "idea_contribution",
+    "version": 1,
+    "project": "olb:proj:wildlife",
+    "authors": [
+      {
+        "key": "2f7a91c02f7a91c02f7a91c02f7a91c02f7a91c02f7a91c02f7a91c02f7a91c0",
+        "kind": "external",
+        "name": "Visitor"
+      }
+    ],
+    "parents": [],
+    "created_at": "2026-08-03T21:40:00+05:30",
+    "fields": {
+      "kind": "comment",
+      "reply_to": "olb:obj:idea-7",
+      "body": {
+        "format": "olb-blocks/1",
+        "blocks": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "text": "Worth controlling for survey time; mornings will dominate either way."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "sig": "ed25519:demo-signature"
+  },
+  {
+    "id": "olb:obj:hyp-h1",
+    "type": "hypothesis",
+    "version": 3,
+    "project": "olb:proj:wildlife",
+    "authors": [
+      {
+        "key": "a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4",
+        "kind": "member",
+        "name": "Nisha Kumar"
+      },
+      {
+        "key": "b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5",
+        "kind": "member",
+        "name": "Aisha Farooq"
+      }
+    ],
+    "parents": [
+      "olb:obj:hyp-h1",
+      "olb:obj:idea-7"
+    ],
+    "created_at": "2026-08-20T09:55:00+05:30",
+    "fields": {
+      "label": "H1",
+      "statement": {
+        "format": "olb-blocks/1",
+        "blocks": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "text": "Lake-edge zones record more bird species per survey hour than park-lawn zones."
+              }
+            ]
+          }
+        ]
+      },
+      "predictions": [
+        {
+          "key": "p1",
+          "text": "Mean bird species per survey hour is at least 30% higher at lake edges."
+        },
+        {
+          "key": "p2",
+          "text": "The difference holds in both morning and evening surveys."
+        }
+      ],
+      "falsification": "H1 is rejected if lake-edge species richness is not higher at alpha 0.05.",
+      "analysis_plan": {
+        "format": "olb-blocks/1",
+        "blocks": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "text": "Species per survey hour per zone; Poisson GLM with zone and time of day; verified sightings only."
+              }
+            ]
+          }
+        ]
+      },
+      "based_on": [
+        "olb:obj:idea-7"
+      ],
+      "status": "committed",
+      "approvals": [
+        "b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5",
+        "c3d4e5f6c3d4e5f6c3d4e5f6c3d4e5f6c3d4e5f6c3d4e5f6c3d4e5f6c3d4e5f6"
+      ],
+      "commitment": {
+        "fingerprint": "sha256:9f2c41d89f2c41d89f2c41d89f2c41d89f2c41d89f2c41d89f2c41d89f2c41d8",
+        "committed_at": "2026-08-20T10:00:00+05:30",
+        "batch": 41
+      }
+    },
+    "sig": "ed25519:demo-signature"
+  },
+  {
+    "id": "olb:obj:grant-1",
+    "type": "grant_request",
+    "version": 2,
+    "project": "olb:proj:wildlife",
+    "authors": [
+      {
+        "key": "a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4",
+        "kind": "member",
+        "name": "Nisha Kumar"
+      }
+    ],
+    "parents": [],
+    "created_at": "2026-08-24T12:00:00+05:30",
+    "fields": {
+      "title": "Four-zone sighting survey",
+      "summary": {
+        "format": "olb-blocks/1",
+        "blocks": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "text": "Funds field kits, a replica node and data curation for 12 weeks."
+              }
+            ]
+          }
+        ]
+      },
+      "hypothesis": "olb:obj:hyp-h1",
+      "amount_requested": {
+        "asset": "lez:native-testnet",
+        "units": "6000"
+      },
+      "budget": [
+        {
+          "item": "Field kits",
+          "amount": {
+            "asset": "lez:native-testnet",
+            "units": "2500"
+          }
+        },
+        {
+          "item": "Replica node, 12 months",
+          "amount": {
+            "asset": "lez:native-testnet",
+            "units": "1500"
+          }
+        },
+        {
+          "item": "Data curation",
+          "amount": {
+            "asset": "lez:native-testnet",
+            "units": "2000"
+          }
+        }
+      ],
+      "milestones": [
+        {
+          "key": "m1",
+          "title": "Protocol published and 200 verified sightings",
+          "amount": {
+            "asset": "lez:native-testnet",
+            "units": "3000"
+          },
+          "evidence_required": "Snapshot with 200 or more verified rows",
+          "state": "released"
+        },
+        {
+          "key": "m2",
+          "title": "Analysis and preprint",
+          "amount": {
+            "asset": "lez:native-testnet",
+            "units": "3000"
+          },
+          "state": "awaiting_approval"
+        }
+      ],
+      "reviewers": [
+        "e5f6a7b8e5f6a7b8e5f6a7b8e5f6a7b8e5f6a7b8e5f6a7b8e5f6a7b8e5f6a7b8"
+      ],
+      "approval_threshold": 1,
+      "escrow_account": "lez:acct:escrow-demo",
+      "opens_at": "2026-08-25T00:00:00+05:30",
+      "external_pledges": true,
+      "status": "funded"
+    },
+    "sig": "ed25519:demo-signature"
+  },
+  {
+    "id": "olb:obj:pledge-3",
+    "type": "pledge",
+    "version": 1,
+    "project": "olb:proj:wildlife",
+    "authors": [
+      {
+        "key": "2f7a91c02f7a91c02f7a91c02f7a91c02f7a91c02f7a91c02f7a91c02f7a91c0",
+        "kind": "external",
+        "name": "Visitor"
+      }
+    ],
+    "parents": [],
+    "created_at": "2026-09-01T16:00:00+05:30",
+    "fields": {
+      "grant": "olb:obj:grant-1",
+      "backer": {
+        "private": true
+      },
+      "amount": {
+        "asset": "lez:native-testnet",
+        "units": "1500"
+      },
+      "kind": "contribution",
+      "tx": "lez:tx:demo-3",
+      "chain_state": "confirmed"
+    },
+    "sig": "ed25519:demo-signature"
+  },
+  {
+    "id": "olb:obj:md-1",
+    "type": "milestone_decision",
+    "version": 1,
+    "project": "olb:proj:wildlife",
+    "authors": [
+      {
+        "key": "e5f6a7b8e5f6a7b8e5f6a7b8e5f6a7b8e5f6a7b8e5f6a7b8e5f6a7b8e5f6a7b8",
+        "kind": "member",
+        "name": "Ana Kovač"
+      }
+    ],
+    "parents": [],
+    "created_at": "2026-10-02T09:00:00+05:30",
+    "fields": {
+      "grant": "olb:obj:grant-1",
+      "milestone": "m1",
+      "verdict": "approve",
+      "evidence": [
+        "olb:obj:snap-1"
+      ],
+      "note": "214 verified rows; protocol v2 published."
+    },
+    "sig": "ed25519:demo-signature"
+  },
+  {
+    "id": "olb:obj:prot-sighting",
+    "type": "collection_protocol",
+    "version": 2,
+    "project": "olb:proj:wildlife",
+    "authors": [
+      {
+        "key": "b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5",
+        "kind": "member",
+        "name": "Aisha Farooq"
+      }
+    ],
+    "parents": [
+      "olb:obj:prot-sighting"
+    ],
+    "created_at": "2026-10-26T10:00:00+05:30",
+    "fields": {
+      "name": "Wildlife sighting",
+      "slug": "wildlife-sighting",
+      "instructions": "Record any animal you see inside the study area. Photograph it before you approach, and never disturb nests or roosts. One submission per group of the same species.",
+      "submit_label": "Submit a sighting",
+      "idea": "olb:obj:idea-lake-edges",
+      "hypothesis_ref": "olb:obj:hyp-h1-lake-edges",
+      "status": "live",
+      "form": [
+        {
+          "key": "photos",
+          "type": "photo",
+          "label": "Photos",
+          "help": "Up to 5 clear photos of the animal.",
+          "required": true,
+          "config": {
+            "min": 1,
+            "max": 5,
+            "max_mb_each": 25,
+            "accept": [
+              "image/jpeg",
+              "image/png",
+              "image/heic",
+              "image/webp"
+            ],
+            "fill_from_exif": [
+              "location",
+              "datetime"
+            ],
+            "strip_metadata": true
+          }
+        },
+        {
+          "key": "category",
+          "type": "choice",
+          "label": "Category",
+          "required": true,
+          "config": {
+            "palette": true,
+            "other_allowed": false,
+            "options": [
+              {
+                "value": "birds",
+                "label": "Birds"
+              },
+              {
+                "value": "mammals",
+                "label": "Mammals"
+              },
+              {
+                "value": "reptiles",
+                "label": "Reptiles",
+                "sensitive": true
+              },
+              {
+                "value": "amphibians",
+                "label": "Amphibians"
+              },
+              {
+                "value": "insects",
+                "label": "Insects"
+              },
+              {
+                "value": "other",
+                "label": "Other"
+              }
+            ]
+          }
+        },
+        {
+          "key": "species",
+          "type": "species",
+          "label": "Species",
+          "help": "Leave blank if unsure; reviewers can help.",
+          "required": false,
+          "config": {
+            "source": "project_list",
+            "project_list": "logos:zb2rhSpeciesListPlaceholder",
+            "filter_by_field": "category",
+            "reviewers_can_suggest": true
+          }
+        },
+        {
+          "key": "count",
+          "type": "number",
+          "label": "Count",
+          "help": "How many individuals you saw.",
+          "required": true,
+          "config": {
+            "min": 1,
+            "integer": true,
+            "unit": "individuals"
+          }
+        },
+        {
+          "key": "location",
+          "type": "location",
+          "label": "Location",
+          "help": "Where you saw it, not where you are now.",
+          "required": true,
+          "config": {
+            "methods": [
+              "photo",
+              "map",
+              "manual"
+            ],
+            "max_accuracy_m": 50,
+            "study_area": "logos:zb2rhStudyAreaPlaceholder",
+            "public_precision": "grid_1km"
+          }
+        },
+        {
+          "key": "observed",
+          "type": "datetime",
+          "label": "Date and time",
+          "required": true,
+          "config": {
+            "fill_from": [
+              "photo",
+              "now"
+            ],
+            "no_future": true
+          }
+        },
+        {
+          "key": "behaviour",
+          "type": "multi",
+          "label": "Behaviour",
+          "help": "Select all that apply.",
+          "required": false,
+          "config": {
+            "options": [
+              {
+                "value": "feeding",
+                "label": "Feeding"
+              },
+              {
+                "value": "flying",
+                "label": "Flying"
+              },
+              {
+                "value": "nesting",
+                "label": "Nesting"
+              },
+              {
+                "value": "resting",
+                "label": "Resting"
+              },
+              {
+                "value": "calling",
+                "label": "Calling"
+              }
+            ]
+          }
+        },
+        {
+          "key": "confidence",
+          "type": "choice",
+          "label": "Confidence",
+          "required": true,
+          "config": {
+            "options": [
+              {
+                "value": "certain",
+                "label": "Certain"
+              },
+              {
+                "value": "likely",
+                "label": "Likely"
+              },
+              {
+                "value": "unsure",
+                "label": "Unsure"
+              }
+            ]
+          }
+        },
+        {
+          "key": "notes",
+          "type": "longtext",
+          "label": "Notes",
+          "help": "Habitat, weather, anything unusual.",
+          "required": false,
+          "config": {
+            "max_length": 2000
+          }
+        }
+      ],
+      "rules": {
+        "who": "members_and_visitors",
+        "review": {
+          "verifications": 1,
+          "exclude_submitter": true,
+          "visitors_always_reviewed": true,
+          "reviewer_role_can_verify": false
+        },
+        "edit_window_hours": 24,
+        "accept_offline": true,
+        "duplicate_check": {
+          "enabled": true,
+          "radius_m": 100,
+          "window_minutes": 30,
+          "match_field": "species",
+          "fallback_field": "category"
+        },
+        "media_replication": "originals_on_replicas"
+      },
+      "dwc_mapping": {
+        "species": "dwc:scientificName",
+        "count": "dwc:individualCount",
+        "observed": "dwc:eventDate",
+        "behaviour": "dwc:behavior",
+        "notes": "dwc:occurrenceRemarks"
+      }
+    },
+    "sig": "ed25519:demo-signature"
+  },
+  {
+    "id": "olb:obj:sub-1284",
+    "type": "submission",
+    "version": 1,
+    "project": "olb:proj:wildlife",
+    "authors": [
+      {
+        "key": "a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4",
+        "kind": "member",
+        "name": "Nisha Kumar"
+      }
+    ],
+    "parents": [],
+    "created_at": "2026-10-27T07:50:00+05:30",
+    "fields": {
+      "protocol": "olb:obj:prot-sighting",
+      "protocol_version": 2,
+      "submitter": {
+        "key": "a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4",
+        "member": true
+      },
+      "observed_at": "2026-10-27T07:42:00+05:30",
+      "public": {
+        "values": {
+          "category": "birds",
+          "species": {
+            "name": "Indian peafowl"
+          },
+          "count": 3,
+          "confidence": "certain",
+          "observed": "2026-10-27T07:42:00+05:30",
+          "photos": [
+            {
+              "cid": "logos:zb2rhPhotoA",
+              "thumb_cid": "logos:zb2rhThumbA",
+              "sha256": "abababababababababababababababababababababababababababababababab"
+            }
+          ]
+        },
+        "location": {
+          "precision": "grid_1km",
+          "lat": 12.975,
+          "lon": 77.595
+        },
+        "sensitive": false
+      },
+      "restricted": "ZW5jcnlwdGVkLWRlbW8=",
+      "source": "form"
+    },
+    "sig": "ed25519:demo-signature"
+  },
+  {
+    "id": "olb:obj:rev-1",
+    "type": "review",
+    "version": 1,
+    "project": "olb:proj:wildlife",
+    "authors": [
+      {
+        "key": "c3d4e5f6c3d4e5f6c3d4e5f6c3d4e5f6c3d4e5f6c3d4e5f6c3d4e5f6c3d4e5f6",
+        "kind": "member",
+        "name": "Rahul Desai"
+      }
+    ],
+    "parents": [],
+    "created_at": "2026-10-27T10:00:00+05:30",
+    "fields": {
+      "target": "olb:obj:sub-1279",
+      "target_version": 1,
+      "verdict": "flagged",
+      "reason": "Photo unclear"
+    },
+    "sig": "ed25519:demo-signature"
+  },
+  {
+    "id": "olb:obj:snap-1",
+    "type": "dataset_snapshot",
+    "version": 1,
+    "project": "olb:proj:wildlife",
+    "authors": [
+      {
+        "key": "b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5",
+        "kind": "member",
+        "name": "Aisha Farooq"
+      }
+    ],
+    "parents": [],
+    "created_at": "2026-10-01T18:00:00+05:30",
+    "fields": {
+      "title": "Verified sightings to 30 Sep",
+      "protocol": "olb:obj:prot-sighting",
+      "protocol_versions": [
+        1,
+        2
+      ],
+      "filter": {
+        "status": [
+          "verified"
+        ],
+        "values": {
+          "category": [
+            "birds"
+          ]
+        },
+        "observed_to": "2026-09-30T23:59:59+05:30"
+      },
+      "row_count": 214,
+      "submissions_root": "sha256:4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e",
+      "submissions_list": "logos:zb2rhSnapList1",
+      "export": "logos:zb2rhSnapCrate1",
+      "frozen_at": "2026-10-01T18:00:00+05:30"
+    },
+    "sig": "ed25519:demo-signature"
+  },
+  {
+    "id": "olb:obj:an-1",
+    "type": "analysis",
+    "version": 4,
+    "project": "olb:proj:wildlife",
+    "authors": [
+      {
+        "key": "b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5",
+        "kind": "member",
+        "name": "Aisha Farooq"
+      },
+      {
+        "key": "0a0b0c0d0a0b0c0d0a0b0c0d0a0b0c0d0a0b0c0d0a0b0c0d0a0b0c0d0a0b0c0d",
+        "kind": "agent",
+        "name": "Labbook agent",
+        "operator": "b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5"
+      }
+    ],
+    "parents": [],
+    "created_at": "2026-10-20T15:00:00+05:30",
+    "fields": {
+      "title": "Species richness by zone",
+      "datasets": [
+        "olb:obj:snap-1"
+      ],
+      "status": "draft",
+      "body": {
+        "format": "olb-blocks/1",
+        "blocks": [
+          {
+            "type": "heading",
+            "level": 2,
+            "content": [
+              {
+                "text": "Species per survey hour"
+              }
+            ]
+          },
+          {
+            "type": "embed",
+            "target": "olb:obj:snap-1",
+            "view": "chart",
+            "query": {
+              "group_by": "category",
+              "metric": "count"
+            },
+            "caption": "Verified bird sightings by zone"
+          },
+          {
+            "type": "math",
+            "tex": "\\log \\lambda = \\beta_0 + \\beta_1 \\cdot \\text{zone} + \\beta_2 \\cdot \\text{time}"
+          },
+          {
+            "type": "conclusion",
+            "statement": "Lake-edge zones show more species per hour in this snapshot.",
+            "hypothesis": "olb:obj:hyp-h1",
+            "prediction": "p1",
+            "verdict": "supports",
+            "evidence": [
+              "olb:obj:snap-1"
+            ]
+          }
+        ]
+      }
+    },
+    "sig": "ed25519:demo-signature"
+  },
+  {
+    "id": "olb:obj:ms-1",
+    "type": "manuscript",
+    "version": 1,
+    "project": "olb:proj:wildlife",
+    "authors": [
+      {
+        "key": "b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5",
+        "kind": "member",
+        "name": "Aisha Farooq"
+      }
+    ],
+    "parents": [],
+    "created_at": "2026-10-25T12:00:00+05:30",
+    "fields": {
+      "title": "Lake edges and bird richness in central Bengaluru",
+      "abstract": "[Abstract to be written]",
+      "body": {
+        "format": "olb-blocks/1",
+        "blocks": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "text": "[Introduction]"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "text": "[Methods]"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "text": "[Results]"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "text": "[Discussion]"
+              }
+            ]
+          }
+        ]
+      },
+      "author_order": [
+        "b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5",
+        "a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4",
+        "c3d4e5f6c3d4e5f6c3d4e5f6c3d4e5f6c3d4e5f6c3d4e5f6c3d4e5f6c3d4e5f6"
+      ],
+      "datasets": [
+        "olb:obj:snap-1"
+      ],
+      "analyses": [
+        "olb:obj:an-1"
+      ],
+      "protocols": [
+        "olb:obj:prot-sighting"
+      ],
+      "hypotheses": [
+        "olb:obj:hyp-h1"
+      ],
+      "references": [],
+      "label": "preprint-v1",
+      "status": "draft"
+    },
+    "sig": "ed25519:demo-signature"
+  },
+  {
+    "id": "olb:obj:pub-1",
+    "type": "publication",
+    "version": 1,
+    "project": "olb:proj:wildlife",
+    "authors": [
+      {
+        "key": "a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4",
+        "kind": "member",
+        "name": "Nisha Kumar"
+      }
+    ],
+    "parents": [],
+    "created_at": "2026-12-15T10:00:00+05:30",
+    "fields": {
+      "manuscript": "olb:obj:ms-1",
+      "manuscript_version": 6,
+      "title": "Lake edges and bird richness in central Bengaluru",
+      "pdf": "logos:zb2rhPaperPdf",
+      "bundle": "logos:zb2rhPaperBundle",
+      "licence": "CC-BY-4.0",
+      "doi": null,
+      "reveals": [
+        "olb:obj:hyp-h1"
+      ],
+      "credits": [
+        {
+          "key": "b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5",
+          "name": "Aisha Farooq",
+          "kind": "person",
+          "roles": [
+            "formal_analysis",
+            "writing_original_draft"
+          ],
+          "accepted": "yes"
+        },
+        {
+          "key": "a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4",
+          "name": "Nisha Kumar",
+          "kind": "person",
+          "roles": [
+            "conceptualization",
+            "investigation"
+          ],
+          "accepted": "yes"
+        },
+        {
+          "key": "0a0b0c0d0a0b0c0d0a0b0c0d0a0b0c0d0a0b0c0d0a0b0c0d0a0b0c0d0a0b0c0d",
+          "name": "Labbook agent",
+          "kind": "agent",
+          "roles": [
+            "data_curation"
+          ],
+          "accepted": "yes"
+        }
+      ],
+      "published_by": "a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4",
+      "published_at": "2026-12-15T10:00:00+05:30",
+      "supersedes": null
+    },
+    "sig": "ed25519:demo-signature"
+  }
+]

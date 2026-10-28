@@ -1,0 +1,576 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openlabbook.unblockresearch.com/schemas/olb-model.schema.json",
+  "title": "Open Labbook record (data model v1)",
+  "description": "Every stored or synced record. Envelope is shared; 'fields' depends on 'type'. Derived values (current stage, review status, totals) are never stored. collection_protocol and submission fields are defined in their own schema files (docs/09).",
+  "$ref": "#/$defs/record",
+
+  "$defs": {
+
+    "id": { "type": "string", "pattern": "^olb:obj:[A-Za-z0-9-]{1,64}$" },
+    "projectId": { "type": "string", "pattern": "^olb:proj:[A-Za-z0-9-]{1,64}$" },
+    "anyId": { "anyOf": [{ "$ref": "#/$defs/id" }, { "$ref": "#/$defs/projectId" }] },
+    "key": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "Ed25519 public key, hex" },
+    "ts": { "type": "string", "format": "date-time" },
+    "cid": { "type": "string", "pattern": "^logos:[A-Za-z0-9]+$" },
+    "sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "fieldKey": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,39}$" },
+    "stage": { "enum": ["idea", "hypothesis", "funding", "experiments", "data", "published"] },
+    "role": { "enum": ["admin", "member", "reviewer"] },
+
+    "amount": {
+      "type": "object",
+      "required": ["asset", "units"],
+      "additionalProperties": false,
+      "properties": {
+        "asset": { "type": "string", "description": "e.g. lez:native-testnet" },
+        "units": { "type": "string", "pattern": "^[0-9]{1,30}$", "description": "Integer base units" }
+      }
+    },
+
+    "actor": {
+      "type": "object",
+      "required": ["key", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "kind": { "enum": ["member", "external", "agent"] },
+        "name": { "type": "string", "maxLength": 120 },
+        "operator": { "$ref": "#/$defs/key", "description": "Required for agents: the human who runs it" }
+      },
+      "if": { "properties": { "kind": { "const": "agent" } } },
+      "then": { "required": ["operator"] }
+    },
+
+    "reference": {
+      "type": "object",
+      "required": ["kind", "identifier"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["doi", "url", "isbn", "olb"] },
+        "identifier": { "type": "string", "minLength": 1 },
+        "title": { "type": "string" },
+        "authors": { "type": "array", "items": { "type": "string" } },
+        "year": { "type": "integer" }
+      }
+    },
+
+    "inline": {
+      "type": "object",
+      "required": ["text"],
+      "additionalProperties": false,
+      "properties": {
+        "text": { "type": "string" },
+        "marks": { "type": "array", "uniqueItems": true, "items": { "enum": ["bold", "italic", "code", "sup", "sub", "strike"] } },
+        "href": { "type": "string" },
+        "mention": { "$ref": "#/$defs/key" }
+      }
+    },
+    "inlines": { "type": "array", "items": { "$ref": "#/$defs/inline" } },
+
+    "block": {
+      "type": "object",
+      "required": ["type"],
+      "oneOf": [
+        { "properties": { "type": { "const": "paragraph" }, "content": { "$ref": "#/$defs/inlines" } }, "required": ["content"], "additionalProperties": false },
+        { "properties": { "type": { "const": "heading" }, "level": { "enum": [1, 2, 3] }, "content": { "$ref": "#/$defs/inlines" } }, "required": ["level", "content"], "additionalProperties": false },
+        { "properties": { "type": { "const": "list" }, "ordered": { "type": "boolean" }, "items": { "type": "array", "items": { "$ref": "#/$defs/inlines" } } }, "required": ["ordered", "items"], "additionalProperties": false },
+        { "properties": { "type": { "const": "quote" }, "content": { "$ref": "#/$defs/inlines" } }, "required": ["content"], "additionalProperties": false },
+        { "properties": { "type": { "const": "code" }, "language": { "type": "string" }, "text": { "type": "string" } }, "required": ["text"], "additionalProperties": false },
+        { "properties": { "type": { "const": "math" }, "tex": { "type": "string" } }, "required": ["tex"], "additionalProperties": false },
+        { "properties": { "type": { "const": "image" }, "cid": { "$ref": "#/$defs/cid" }, "alt": { "type": "string" }, "caption": { "type": "string" } }, "required": ["cid", "alt"], "additionalProperties": false },
+        { "properties": { "type": { "const": "table" }, "header": { "type": "boolean" }, "rows": { "type": "array", "items": { "type": "array", "items": { "type": "string" } } } }, "required": ["rows"], "additionalProperties": false },
+        { "properties": { "type": { "const": "citation" }, "reference": { "$ref": "#/$defs/reference" } }, "required": ["reference"], "additionalProperties": false },
+        {
+          "properties": {
+            "type": { "const": "embed" },
+            "target": { "$ref": "#/$defs/id", "description": "A dataset_snapshot (or submission) id" },
+            "view": { "enum": ["table", "chart", "map", "summary"] },
+            "query": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "group_by": { "$ref": "#/$defs/fieldKey" },
+                "metric": { "enum": ["count", "sum", "mean", "median", "min", "max"] },
+                "field": { "$ref": "#/$defs/fieldKey" },
+                "filter": { "type": "object", "additionalProperties": { "type": "array", "items": { "type": "string" } } }
+              }
+            },
+            "caption": { "type": "string" }
+          },
+          "required": ["target", "view"],
+          "additionalProperties": false
+        },
+        {
+          "properties": {
+            "type": { "const": "conclusion" },
+            "statement": { "type": "string", "minLength": 1 },
+            "hypothesis": { "$ref": "#/$defs/id" },
+            "prediction": { "type": "string", "description": "Prediction key, e.g. p1" },
+            "verdict": { "enum": ["supports", "refutes", "inconclusive"] },
+            "evidence": { "type": "array", "items": { "$ref": "#/$defs/id" } }
+          },
+          "required": ["statement", "hypothesis", "verdict", "evidence"],
+          "additionalProperties": false
+        }
+      ]
+    },
+
+    "richDoc": {
+      "type": "object",
+      "required": ["format", "blocks"],
+      "additionalProperties": false,
+      "properties": {
+        "format": { "const": "olb-blocks/1" },
+        "blocks": { "type": "array", "items": { "$ref": "#/$defs/block" } },
+        "crdt_state": { "$ref": "#/$defs/cid", "description": "Collaborative-editing state (e.g. Automerge) for live editing; blocks are the materialised snapshot." }
+      }
+    },
+
+    "identity": {
+      "description": "A Logos user's Open Labbook identity (profile, not a project record).",
+      "type": "object",
+      "required": ["olb_id", "sig_pk", "seal_pk", "name", "created_at"],
+      "additionalProperties": false,
+      "properties": {
+        "olb_id": { "type": "string", "pattern": "^olb1:" },
+        "sig_pk": { "$ref": "#/$defs/key" },
+        "seal_pk": { "type": "string", "description": "ML-KEM-768 public key, base64url" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120, "description": "Self-declared, unverified" },
+        "orcid": { "type": ["string", "null"], "pattern": "^[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9]{3}[0-9X]$" },
+        "created_at": { "$ref": "#/$defs/ts" }
+      }
+    },
+
+    "record": {
+      "type": "object",
+      "required": ["id", "type", "version", "project", "authors", "parents", "created_at", "fields", "sig"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/anyId" },
+        "type": { "enum": ["project", "membership", "join_request", "stage_transition", "idea_contribution", "hypothesis", "grant_request", "pledge", "milestone_decision", "collection_protocol", "submission", "review", "dataset_snapshot", "analysis", "manuscript", "publication"] },
+        "version": { "type": "integer", "minimum": 1 },
+        "project": { "$ref": "#/$defs/projectId" },
+        "authors": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/actor" } },
+        "parents": { "type": "array", "items": { "$ref": "#/$defs/anyId" }, "description": "Previous version and records this one builds on" },
+        "created_at": { "$ref": "#/$defs/ts" },
+        "fields": { "type": "object" },
+        "sig": { "type": "string", "minLength": 1 },
+        "co_sigs": { "type": "array", "items": { "type": "string" } }
+      },
+      "allOf": [
+        { "if": { "properties": { "type": { "const": "project" } } }, "then": { "properties": { "fields": { "$ref": "#/$defs/project" }, "id": { "$ref": "#/$defs/projectId" } } } },
+        { "if": { "properties": { "type": { "const": "membership" } } }, "then": { "properties": { "fields": { "$ref": "#/$defs/membership" } } } },
+        { "if": { "properties": { "type": { "const": "join_request" } } }, "then": { "properties": { "fields": { "$ref": "#/$defs/join_request" } } } },
+        { "if": { "properties": { "type": { "const": "stage_transition" } } }, "then": { "properties": { "fields": { "$ref": "#/$defs/stage_transition" }, "version": { "const": 1 } } } },
+        { "if": { "properties": { "type": { "const": "idea_contribution" } } }, "then": { "properties": { "fields": { "$ref": "#/$defs/idea_contribution" } } } },
+        { "if": { "properties": { "type": { "const": "hypothesis" } } }, "then": { "properties": { "fields": { "$ref": "#/$defs/hypothesis" } } } },
+        { "if": { "properties": { "type": { "const": "grant_request" } } }, "then": { "properties": { "fields": { "$ref": "#/$defs/grant_request" } } } },
+        { "if": { "properties": { "type": { "const": "pledge" } } }, "then": { "properties": { "fields": { "$ref": "#/$defs/pledge" } } } },
+        { "if": { "properties": { "type": { "const": "milestone_decision" } } }, "then": { "properties": { "fields": { "$ref": "#/$defs/milestone_decision" } } } },
+        { "if": { "properties": { "type": { "const": "collection_protocol" } } }, "then": { "properties": { "fields": { "$ref": "https://openlabbook.unblockresearch.com/schemas/collection-protocol.schema.json" } } } },
+        { "if": { "properties": { "type": { "const": "submission" } } }, "then": { "properties": { "fields": { "$ref": "https://openlabbook.unblockresearch.com/schemas/submission.schema.json" } } } },
+        { "if": { "properties": { "type": { "const": "review" } } }, "then": { "properties": { "fields": { "$ref": "#/$defs/review" } } } },
+        { "if": { "properties": { "type": { "const": "dataset_snapshot" } } }, "then": { "properties": { "fields": { "$ref": "#/$defs/dataset_snapshot" }, "version": { "const": 1 } } } },
+        { "if": { "properties": { "type": { "const": "analysis" } } }, "then": { "properties": { "fields": { "$ref": "#/$defs/analysis" } } } },
+        { "if": { "properties": { "type": { "const": "manuscript" } } }, "then": { "properties": { "fields": { "$ref": "#/$defs/manuscript" } } } },
+        { "if": { "properties": { "type": { "const": "publication" } } }, "then": { "properties": { "fields": { "$ref": "#/$defs/publication" } } } }
+      ]
+    },
+
+    "project": {
+      "type": "object",
+      "required": ["title", "privacy", "stages_enabled", "settings"],
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "summary": { "type": "string", "maxLength": 280 },
+        "description": { "$ref": "#/$defs/richDoc" },
+        "field": { "type": "string" },
+        "keywords": { "type": "array", "maxItems": 20, "items": { "type": "string", "maxLength": 60 } },
+        "licence": { "enum": ["CC-BY-4.0", "CC0-1.0", "CC-BY-SA-4.0"] },
+        "privacy": { "enum": ["open", "private", "invite_only"], "description": "Immutable after version 1" },
+        "stages_enabled": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/stage" }, "description": "In lifecycle order; must end with 'published'" },
+        "start_date": { "type": "string", "format": "date" },
+        "expected_duration": { "enum": ["lt_6m", "6_12m", "1_2y", "gt_2y"] },
+        "team_size": { "enum": ["1", "2_5", "6_15", "gt_15"] },
+        "settings": {
+          "type": "object",
+          "required": ["anchoring"],
+          "additionalProperties": false,
+          "properties": {
+            "anchoring": { "enum": ["every", "batched", "daily", "milestones"] },
+            "merge_approvals": { "type": "integer", "minimum": 0, "maximum": 2 },
+            "replica": { "type": "boolean" },
+            "allow_visitors": { "type": "boolean", "description": "Open projects only" },
+            "auto_tags": { "type": "boolean" },
+            "reviewers_can_verify": { "type": "boolean" },
+            "media_replication": { "enum": ["everyone_pins_all", "originals_on_replicas"] }
+          }
+        },
+        "references": { "type": "array", "items": { "$ref": "#/$defs/reference" } },
+        "existing_grant": { "type": "string" }
+      }
+    },
+
+    "membership": {
+      "type": "object",
+      "required": ["member", "name", "role", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "member": { "$ref": "#/$defs/key" },
+        "name": { "type": "string" },
+        "role": { "$ref": "#/$defs/role" },
+        "status": { "enum": ["invited", "active", "removed"] },
+        "invited_by": { "$ref": "#/$defs/key" },
+        "invite_kind": { "enum": ["by_id", "by_code", "join_request", "creator"] },
+        "key_version": { "type": "integer", "minimum": 1, "description": "Project key version sealed to this member" }
+      }
+    },
+
+    "join_request": {
+      "type": "object",
+      "required": ["requester", "name", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "requester": { "$ref": "#/$defs/key" },
+        "name": { "type": "string" },
+        "orcid": { "type": ["string", "null"] },
+        "note": { "type": "string", "maxLength": 1000 },
+        "status": { "enum": ["pending", "approved", "declined"] },
+        "decided_by": { "$ref": "#/$defs/key" }
+      }
+    },
+
+    "stage_transition": {
+      "type": "object",
+      "required": ["from", "to", "direction", "checks"],
+      "additionalProperties": false,
+      "properties": {
+        "from": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/stage" }] },
+        "to": { "$ref": "#/$defs/stage" },
+        "direction": { "enum": ["start", "forward", "skip", "back"] },
+        "reason": { "type": "string", "maxLength": 1000 },
+        "override": { "type": "boolean", "description": "Admin moved forward although a non-critical guard failed (only Funding → Experiments)" },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["rule", "passed"],
+            "additionalProperties": false,
+            "properties": { "rule": { "type": "string" }, "passed": { "type": "boolean" }, "detail": { "type": "string" } }
+          }
+        }
+      },
+      "allOf": [
+        { "if": { "properties": { "direction": { "const": "back" } } }, "then": { "required": ["reason"] } },
+        { "if": { "properties": { "override": { "const": true } }, "required": ["override"] }, "then": { "required": ["reason"] } }
+      ]
+    },
+
+    "idea_contribution": {
+      "type": "object",
+      "required": ["kind", "body"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["proposal", "comment", "question", "evidence"] },
+        "body": { "$ref": "#/$defs/richDoc" },
+        "reply_to": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/id" }] },
+        "references": { "type": "array", "items": { "$ref": "#/$defs/reference" } }
+      }
+    },
+
+    "hypothesis": {
+      "type": "object",
+      "required": ["label", "statement", "predictions", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "label": { "type": "string", "pattern": "^H[0-9]{1,2}$" },
+        "statement": { "$ref": "#/$defs/richDoc" },
+        "predictions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["key", "text"],
+            "additionalProperties": false,
+            "properties": { "key": { "type": "string", "pattern": "^p[0-9]{1,2}$" }, "text": { "type": "string", "minLength": 1 } }
+          }
+        },
+        "falsification": { "type": "string" },
+        "analysis_plan": { "$ref": "#/$defs/richDoc" },
+        "based_on": { "type": "array", "items": { "$ref": "#/$defs/id" } },
+        "status": { "enum": ["draft", "in_review", "committed", "revealed"] },
+        "approvals": { "type": "array", "items": { "$ref": "#/$defs/key" } },
+        "commitment": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["fingerprint", "committed_at"],
+              "additionalProperties": false,
+              "properties": {
+                "fingerprint": { "$ref": "#/$defs/sha256" },
+                "committed_at": { "$ref": "#/$defs/ts" },
+                "batch": { "type": "integer" },
+                "salt_revealed": { "type": "string" }
+              }
+            }
+          ]
+        }
+      },
+      "allOf": [
+        { "if": { "properties": { "status": { "enum": ["committed", "revealed"] } } }, "then": { "required": ["commitment"], "properties": { "commitment": { "type": "object" } } } }
+      ]
+    },
+
+    "grant_request": {
+      "type": "object",
+      "required": ["title", "hypothesis", "amount_requested", "milestones", "reviewers", "approval_threshold", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "summary": { "$ref": "#/$defs/richDoc" },
+        "hypothesis": { "$ref": "#/$defs/id" },
+        "amount_requested": { "$ref": "#/$defs/amount" },
+        "budget": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["item", "amount"],
+            "additionalProperties": false,
+            "properties": { "item": { "type": "string" }, "amount": { "$ref": "#/$defs/amount" } }
+          }
+        },
+        "milestones": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["key", "title", "amount", "state"],
+            "additionalProperties": false,
+            "properties": {
+              "key": { "type": "string", "pattern": "^m[0-9]{1,2}$" },
+              "title": { "type": "string" },
+              "amount": { "$ref": "#/$defs/amount" },
+              "evidence_required": { "type": "string" },
+              "state": { "enum": ["locked", "open", "awaiting_approval", "released"] }
+            }
+          }
+        },
+        "reviewers": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/key" } },
+        "approval_threshold": { "type": "integer", "minimum": 1 },
+        "escrow_account": { "type": "string", "description": "LEZ account id held by olb_funding" },
+        "opens_at": { "$ref": "#/$defs/ts" },
+        "closes_at": { "$ref": "#/$defs/ts" },
+        "external_pledges": { "type": "boolean", "default": true },
+        "status": { "enum": ["draft", "open", "funded", "closed", "cancelled"] }
+      }
+    },
+
+    "pledge": {
+      "type": "object",
+      "required": ["grant", "backer", "amount", "kind", "tx", "chain_state"],
+      "additionalProperties": false,
+      "properties": {
+        "grant": { "$ref": "#/$defs/id" },
+        "backer": {
+          "type": "object",
+          "required": ["private"],
+          "additionalProperties": false,
+          "properties": {
+            "private": { "type": "boolean" },
+            "key": { "$ref": "#/$defs/key" },
+            "display_name": { "type": "string" }
+          },
+          "if": { "properties": { "private": { "const": false } } },
+          "then": { "required": ["key"] }
+        },
+        "amount": { "$ref": "#/$defs/amount" },
+        "kind": { "const": "contribution", "description": "No financial return: no equity, interest or revenue share" },
+        "tx": { "type": "string", "description": "LEZ transaction reference" },
+        "chain_state": { "enum": ["pending", "confirmed", "refunded"] }
+      }
+    },
+
+    "milestone_decision": {
+      "type": "object",
+      "required": ["grant", "milestone", "verdict"],
+      "additionalProperties": false,
+      "properties": {
+        "grant": { "$ref": "#/$defs/id" },
+        "milestone": { "type": "string", "pattern": "^m[0-9]{1,2}$" },
+        "verdict": { "enum": ["approve", "request_evidence"] },
+        "evidence": { "type": "array", "items": { "$ref": "#/$defs/id" } },
+        "note": { "type": "string" }
+      }
+    },
+
+    "review": {
+      "type": "object",
+      "required": ["target", "verdict"],
+      "additionalProperties": false,
+      "properties": {
+        "target": { "$ref": "#/$defs/id" },
+        "target_version": { "type": "integer", "minimum": 1 },
+        "verdict": { "enum": ["verified", "flagged", "suggestion"] },
+        "reason": { "type": "string" },
+        "suggested": {
+          "type": "object",
+          "required": ["field", "value"],
+          "additionalProperties": false,
+          "properties": { "field": { "$ref": "#/$defs/fieldKey" }, "value": {} }
+        }
+      },
+      "allOf": [
+        { "if": { "properties": { "verdict": { "const": "flagged" } } }, "then": { "required": ["reason"] } },
+        { "if": { "properties": { "verdict": { "const": "suggestion" } } }, "then": { "required": ["suggested"] } }
+      ]
+    },
+
+    "dataset_snapshot": {
+      "type": "object",
+      "required": ["title", "protocol", "protocol_versions", "filter", "row_count", "submissions_root", "submissions_list", "frozen_at"],
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": "string" },
+        "protocol": { "$ref": "#/$defs/id" },
+        "protocol_versions": { "type": "array", "minItems": 1, "items": { "type": "integer", "minimum": 1 } },
+        "filter": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": { "type": "array", "items": { "enum": ["verified", "needs_review", "flagged"] } },
+            "values": { "type": "object", "additionalProperties": { "type": "array", "items": { "type": "string" } } },
+            "observed_from": { "$ref": "#/$defs/ts" },
+            "observed_to": { "$ref": "#/$defs/ts" }
+          }
+        },
+        "row_count": { "type": "integer", "minimum": 0 },
+        "submissions_root": { "$ref": "#/$defs/sha256", "description": "Merkle root over sorted (submission id, version) pairs" },
+        "submissions_list": { "$ref": "#/$defs/cid" },
+        "export": { "$ref": "#/$defs/cid", "description": "RO-Crate of the snapshot" },
+        "frozen_at": { "$ref": "#/$defs/ts" }
+      }
+    },
+
+    "analysis": {
+      "type": "object",
+      "required": ["title", "body", "datasets", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": "string", "minLength": 1 },
+        "body": { "$ref": "#/$defs/richDoc" },
+        "datasets": { "type": "array", "items": { "$ref": "#/$defs/id" } },
+        "status": { "enum": ["draft", "final"] }
+      }
+    },
+
+    "manuscript": {
+      "type": "object",
+      "required": ["title", "abstract", "body", "author_order", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": "string", "minLength": 1 },
+        "abstract": { "type": "string" },
+        "body": { "$ref": "#/$defs/richDoc" },
+        "author_order": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/key" } },
+        "datasets": { "type": "array", "items": { "$ref": "#/$defs/id" } },
+        "analyses": { "type": "array", "items": { "$ref": "#/$defs/id" } },
+        "protocols": { "type": "array", "items": { "$ref": "#/$defs/id" } },
+        "hypotheses": { "type": "array", "items": { "$ref": "#/$defs/id" } },
+        "references": { "type": "array", "items": { "$ref": "#/$defs/reference" } },
+        "pdf": { "$ref": "#/$defs/cid" },
+        "label": { "type": "string", "description": "e.g. preprint-v4" },
+        "status": { "enum": ["draft", "ready"] }
+      }
+    },
+
+    "credit": {
+      "type": "object",
+      "required": ["key", "name", "kind", "roles", "accepted"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "name": { "type": "string" },
+        "kind": { "enum": ["person", "agent"] },
+        "roles": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["conceptualization", "data_curation", "formal_analysis", "funding_acquisition", "investigation", "methodology", "project_administration", "resources", "software", "supervision", "validation", "visualization", "writing_original_draft", "writing_review_editing"] }
+        },
+        "accepted": { "enum": ["yes", "pending", "contested"] }
+      }
+    },
+
+    "publication": {
+      "type": "object",
+      "required": ["manuscript", "manuscript_version", "title", "pdf", "bundle", "licence", "credits", "published_by", "published_at"],
+      "additionalProperties": false,
+      "properties": {
+        "manuscript": { "$ref": "#/$defs/id" },
+        "manuscript_version": { "type": "integer", "minimum": 1 },
+        "title": { "type": "string" },
+        "pdf": { "$ref": "#/$defs/cid" },
+        "bundle": { "$ref": "#/$defs/cid", "description": "Paper + data + protocols + provenance (RO-Crate)" },
+        "licence": { "enum": ["CC-BY-4.0", "CC0-1.0", "CC-BY-SA-4.0"] },
+        "doi": { "type": ["string", "null"] },
+        "reveals": { "type": "array", "items": { "$ref": "#/$defs/id" }, "description": "Hypotheses whose commitments are revealed" },
+        "credits": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/credit" } },
+        "published_by": { "$ref": "#/$defs/key" },
+        "published_at": { "$ref": "#/$defs/ts" },
+        "supersedes": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/id" }] }
+      }
+    },
+
+    "historyEvent": {
+      "description": "Projection of one signed commit for the History view. Not stored as a record; carried in the commit.",
+      "type": "object",
+      "required": ["commit", "at", "actor", "action", "stage", "target", "anchor"],
+      "additionalProperties": false,
+      "properties": {
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{7,64}$" },
+        "at": { "$ref": "#/$defs/ts" },
+        "actor": { "$ref": "#/$defs/actor" },
+        "action": {
+          "enum": [
+            "project_created", "settings_changed",
+            "member_invited", "member_joined", "member_role_changed", "member_removed", "join_requested", "join_decided",
+            "stage_moved",
+            "idea_contributed",
+            "hypothesis_edited", "hypothesis_reviewed", "hypothesis_committed", "hypothesis_revealed",
+            "grant_drafted", "grant_opened", "pledge_made", "milestone_decided", "milestone_released", "grant_closed",
+            "protocol_drafted", "protocol_published", "protocol_closed",
+            "submission_added", "submission_corrected", "submission_reviewed",
+            "snapshot_frozen", "analysis_edited", "manuscript_edited", "manuscript_ready",
+            "paper_published", "credit_responded"
+          ]
+        },
+        "stage": { "$ref": "#/$defs/stage" },
+        "target": {
+          "type": "object",
+          "required": ["type", "id"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "type": "string" },
+            "id": { "$ref": "#/$defs/anyId" },
+            "title": { "type": "string" },
+            "version": { "type": "integer" }
+          }
+        },
+        "protocol": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/id" }] },
+        "detail": { "type": "string" },
+        "anchor": {
+          "type": "object",
+          "required": ["state"],
+          "additionalProperties": false,
+          "properties": {
+            "state": { "enum": ["pending", "anchored"] },
+            "batch": { "type": "integer" }
+          }
+        }
+      }
+    }
+  }
+}

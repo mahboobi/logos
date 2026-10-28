@@ -16,6 +16,7 @@ pub mod canon;
 pub mod dag;
 pub mod hashing;
 pub mod merge;
+pub mod model;
 pub mod merkle;
 pub mod record;
 pub mod stages;

@@ -1,0 +1,24 @@
+erDiagram
+  IDENTITY ||--o{ MEMBERSHIP : "joins as"
+  PROJECT ||--|{ MEMBERSHIP : has
+  PROJECT ||--o{ JOIN_REQUEST : receives
+  PROJECT ||--|{ STAGE_TRANSITION : "moves by"
+  PROJECT ||--o{ IDEA_CONTRIBUTION : "Idea"
+  IDEA_CONTRIBUTION ||--o{ IDEA_CONTRIBUTION : replies
+  PROJECT ||--o{ HYPOTHESIS : "Hypothesis"
+  HYPOTHESIS }o--o{ IDEA_CONTRIBUTION : "based on"
+  PROJECT ||--o{ GRANT_REQUEST : "Funding"
+  GRANT_REQUEST }o--|| HYPOTHESIS : tests
+  GRANT_REQUEST ||--o{ PLEDGE : receives
+  GRANT_REQUEST ||--o{ MILESTONE_DECISION : "released by"
+  PROJECT ||--o{ COLLECTION_PROTOCOL : "Experiments"
+  COLLECTION_PROTOCOL ||--o{ SUBMISSION : collects
+  SUBMISSION ||--o{ REVIEW : "reviewed by"
+  COLLECTION_PROTOCOL ||--o{ DATASET_SNAPSHOT : "frozen into"
+  PROJECT ||--o{ ANALYSIS : "Data"
+  ANALYSIS }o--o{ DATASET_SNAPSHOT : cites
+  PROJECT ||--o{ MANUSCRIPT : "Data (preprint)"
+  MANUSCRIPT }o--o{ DATASET_SNAPSHOT : cites
+  MANUSCRIPT ||--o{ PUBLICATION : "published as"
+  IDENTITY ||--o{ PLEDGE : backs
+  IDENTITY ||--o{ SUBMISSION : submits

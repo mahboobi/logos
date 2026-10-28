@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openlabbook.unblockresearch.com/schemas/submission.schema.json",
+  "title": "Open Labbook submission (fields of a submission record)",
+  "description": "Values are validated against the referenced protocol version at submit time and again on every receiving node. 'restricted' is ciphertext; its plaintext follows #/$defs/restrictedPlain.",
+  "type": "object",
+  "required": ["protocol", "protocol_version", "submitter", "observed_at", "public", "source"],
+  "additionalProperties": false,
+  "properties": {
+    "protocol": { "type": "string", "pattern": "^olb:obj:" },
+    "protocol_version": { "type": "integer", "minimum": 1 },
+    "submitter": {
+      "type": "object",
+      "required": ["key", "member"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "type": "string" },
+        "member": { "type": "boolean" }
+      }
+    },
+    "observed_at": { "type": "string", "format": "date-time" },
+    "public": {
+      "type": "object",
+      "required": ["values", "location", "sensitive"],
+      "additionalProperties": false,
+      "properties": {
+        "values": { "$ref": "#/$defs/values" },
+        "location": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["precision", "lat", "lon"],
+              "additionalProperties": false,
+              "properties": {
+                "precision": { "enum": ["exact", "grid_1km", "grid_10km"] },
+                "lat": { "type": "number", "minimum": -90, "maximum": 90 },
+                "lon": { "type": "number", "minimum": -180, "maximum": 180 }
+              }
+            }
+          ]
+        },
+        "sensitive": { "type": "boolean" }
+      }
+    },
+    "restricted": { "type": "string", "description": "Base64 ciphertext of #/$defs/restrictedPlain, encrypted with the idea or project key." },
+    "source": { "enum": ["form", "csv_import", "offline_draft", "visitor_intake"] },
+    "import_file_cid": { "type": ["string", "null"] },
+    "duplicate_of_hint": { "type": ["string", "null"] }
+  },
+  "$defs": {
+    "media": {
+      "type": "object",
+      "required": ["cid", "sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "cid": { "type": "string", "pattern": "^logos:" },
+        "thumb_cid": { "type": "string", "pattern": "^logos:" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "bytes": { "type": "integer", "minimum": 1 },
+        "width": { "type": "integer" },
+        "height": { "type": "integer" },
+        "seconds": { "type": "number" },
+        "mime": { "type": "string" }
+      }
+    },
+    "location": {
+      "type": "object",
+      "required": ["lat", "lon", "method"],
+      "additionalProperties": false,
+      "properties": {
+        "lat": { "type": "number", "minimum": -90, "maximum": 90 },
+        "lon": { "type": "number", "minimum": -180, "maximum": 180 },
+        "accuracy_m": { "type": ["number", "null"], "minimum": 0 },
+        "method": { "enum": ["photo", "map", "manual"] },
+        "outside_study_area": { "type": "boolean" }
+      }
+    },
+    "value": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string" },
+        { "type": "number" },
+        { "type": "boolean" },
+        { "type": "array", "items": { "type": "string" } },
+        { "type": "array", "items": { "$ref": "#/$defs/media" } },
+        { "$ref": "#/$defs/location" },
+        {
+          "type": "object",
+          "required": ["name"],
+          "additionalProperties": false,
+          "properties": { "name": { "type": "string" }, "taxon_id": { "type": ["string", "null"] }, "source": { "type": "string" } }
+        }
+      ]
+    },
+    "values": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9_]{0,39}$" },
+      "additionalProperties": { "$ref": "#/$defs/value" }
+    },
+    "restrictedPlain": {
+      "type": "object",
+      "required": ["values"],
+      "additionalProperties": false,
+      "properties": { "values": { "$ref": "#/$defs/values" } }
+    }
+  }
+}
