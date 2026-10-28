@@ -1,0 +1,15 @@
+%% The three-hop chain from a QML view to olb_core, and the call QML cannot
+%% make. Source for docs/14 figure 1.
+flowchart LR
+  subgraph P1["ui-host · process 1"]
+    QML["QML view<br/>Board.qml · Main.qml<br/><i>sandboxed</i>"]
+    BE["olb_ui backend<br/>OlbUiBackend C++<br/><i>holds no secrets</i>"]
+  end
+  subgraph P2["logos_host · process 2"]
+    CORE["olb_core<br/>olb-vcs · olb-keys<br/><i>keys, store, sole egress</i>"]
+  end
+
+  QML -- "QtRO slot call" --> BE
+  BE  -- "LogosAPI, synchronous" --> CORE
+  CORE -. "reply as a replicated PROP,<br/>never a return value" .-> QML
+  QML  -- "logos.callModule<br/>DOES NOT EXIST here" --x CORE

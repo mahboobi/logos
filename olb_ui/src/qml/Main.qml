@@ -46,19 +46,67 @@ Rectangle {
     property string historyFilterIdea: ""
 
     // docs/03 nav. `done` marks what actually exists today.
-    readonly property var navItems: [
-        { label: "Public Board",      done: true  },
-        { label: "Personal Notebook", done: true  },
-        { label: "Notebook entry",    done: true  },
-        { label: "New project",       done: true  },
-        { label: "History",           done: true  },
-        { label: "Members",           done: true  },
-        { label: "Hypotheses",        done: true  },
-        { label: "Funding",           done: true  },
-        { label: "Publish",           done: true  },
-        { label: "Settings",          done: true  },
-        { label: "Diagnostics",       done: true  }
-    ]
+    //
+    // Screens that belong to a STAGE only appear when the current project
+    // actually uses that stage (docs/03 S8: skipped stages are hidden, and
+    // docs/13 makes `stages_enabled` the project's own list). Before this the
+    // list was a fixed eleven entries, so a project that skipped Funding
+    // still showed a Funding screen and switching projects changed nothing.
+    //
+    // Experiments and Data have no screen yet, so they map to nothing and
+    // contribute no entry either way.
+    readonly property var stageScreens: ({
+        "Hypothesis": "Hypotheses",
+        "Funding":    "Funding",
+        "Publish":    "Publish",
+        "Published":  "Publish"
+    })
+
+    /// The stage screens the current project uses, in the project's own order.
+    readonly property var activeStageScreens: {
+        const used = root.boardData.stagesUsed || [];
+        const out = [];
+        for (let i = 0; i < used.length; i++) {
+            const screen = root.stageScreens[used[i]];
+            // A stage may be spelled either way across v1 and v2; both map
+            // to the same screen, so guard against listing it twice.
+            if (screen && out.indexOf(screen) === -1) out.push(screen);
+        }
+        return out;
+    }
+
+    /// Every stage screen that exists, used or not — needed to tell "this
+    /// project does not use it" from "this is not a stage screen at all".
+    readonly property var allStageScreens: ["Hypotheses", "Funding", "Publish"]
+
+    readonly property var navItems: {
+        const items = [
+            { label: "Public Board",      done: true },
+            { label: "Personal Notebook", done: true },
+            { label: "Notebook entry",    done: true },
+            { label: "New project",       done: true },
+            { label: "History",           done: true },
+            { label: "Members",           done: true }
+        ];
+        const stages = root.activeStageScreens;
+        for (let i = 0; i < stages.length; i++)
+            items.push({ label: stages[i], done: true });
+        items.push({ label: "Settings",    done: true });
+        items.push({ label: "Diagnostics", done: true });
+        return items;
+    }
+
+    /// Leaving a screen the current project has no stage for.
+    ///
+    /// Switching projects can pull the ground out from under whatever is open:
+    /// without this the view stays on, say, Funding for a project that skips
+    /// it, with no nav entry left to leave by.
+    onActiveStageScreensChanged: {
+        if (root.allStageScreens.indexOf(root.screen) !== -1
+            && root.activeStageScreens.indexOf(root.screen) === -1) {
+            root.screen = "Public Board";
+        }
+    }
     function screenIndex(name) {
         switch (name) {
         case "Public Board":      return 0;

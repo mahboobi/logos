@@ -1,0 +1,10 @@
+%% What one data-changing action does. Source for docs/14 figure 2.
+flowchart LR
+  ACT([user action]) --> PERM{"perms::allows<br/>+ editable_at"}
+  PERM -- refused --> ERR["error envelope<br/><i>from the core, not<br/>a hidden button</i>"]
+  PERM -- allowed --> PAY["typed payload<br/>model::*Fields<br/>deny_unknown_fields"]
+  PAY --> SEAL["seal_record<br/><i>sig over the tagged<br/>preimage the id hashes</i>"]
+  SEAL --> COMMIT["dag::receive<br/><i>the same 8 checks an<br/>incoming commit faces</i>"]
+  COMMIT --> DISK["append-only, sealed per file<br/>commits.jsonl · records.jsonl<br/>refs.json · state.json"]
+  COMMIT --> HIST["history event<br/>who · action · stage · target<br/>anchor: pending"]
+  COMMIT --> PEERS["publish_heads<br/>sealed frame to a bucket topic"]

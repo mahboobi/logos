@@ -1,0 +1,12 @@
+%% olb_core's three ways out, and the hop that does not work on a dev
+%% profile. Source for docs/14 figure 3.
+flowchart LR
+  CORE["olb_core<br/><i>sole network egress</i>"]
+
+  CORE -- "sealed frames" --> DEL["delivery_module<br/>/olb/1/sync-&lt;b&gt;/proto · 16 buckets<br/>bucket = low nibble of SHA-256<br/><i>transient, never the truth</i>"]
+  DEL -- "membership proof" --> RLN["RLN gate<br/><i>0 memberships →<br/>sends unvalidated</i>"]
+
+  CORE -- "content ids in, bytes out" --> ST["storage_module<br/><i>no paid persistence →<br/>pin on every member + replica</i>"]
+
+  CORE -- "BLOCKED on a dev profile" --x LEZC["lez_core wallet<br/><i>ships no darwin-arm64-dev</i>"]
+  CORE -- "out of process instead" --> RUN["host runner<br/>src/bin/run_olb_registry.rs<br/>anchor(tag, root, count) → LEZ"]
