@@ -63,19 +63,17 @@ void OlbUiBackend::refreshLockState()
 
 void OlbUiBackend::createPassphrase(QString passphrase)
 {
-    const QString result = modules().olb_core.create_passphrase(passphrase);
+    setLastActionResult(modules().olb_core.create_passphrase(passphrase));
     setLockState(modules().olb_core.lock_state());
     refreshBoard();
-    setLastActionResult(result);
 }
 
 void OlbUiBackend::unlockStore(QString passphrase)
 {
-    const QString result = modules().olb_core.unlock(passphrase);
+    setLastActionResult(modules().olb_core.unlock(passphrase));
     setLockState(modules().olb_core.lock_state());
     // Unlocking is the moment everything becomes readable at once.
     refreshBoard();
-    setLastActionResult(result);
 }
 
 void OlbUiBackend::refreshIdentity()
@@ -92,11 +90,10 @@ void OlbUiBackend::inviteMember(QString projectId, QString olbId, QString role)
 
 void OlbUiBackend::acceptInvite(QString inviteId)
 {
-    const QString result = modules().olb_core.accept_invite(inviteId);
+    setLastActionResult(modules().olb_core.accept_invite(inviteId));
     // Accepting installs a key and joins a project, so everything the
     // screens show can change at once.
     refreshBoard();
-    setLastActionResult(result);
 }
 
 void OlbUiBackend::refreshBoard()
@@ -118,39 +115,42 @@ void OlbUiBackend::openRecord(QString recordId)
 
 void OlbUiBackend::createProject(QString specJson)
 {
-    // The result goes out last: the view navigates to the board the moment
-    // it sees a success, and it should arrive to fresh contents.
-    const QString result = modules().olb_core.create_project(specJson);
+    // The result goes out FIRST, before refreshing anything.
+    //
+    // Every call in refreshBoard() is a synchronous IPC round-trip, and on
+    // 28 Oct one of them (set_current_project) was observed blocking the UI
+    // thread for over six minutes against an idle olb_core — a lost reply,
+    // not slow work. Publishing the result after them means a hung refresh
+    // also costs the person any word of an action that already succeeded:
+    // the project was on disk while the button still read "Creating...".
+    // The board is reactive, so arriving a moment before it repopulates is
+    // strictly better than arriving never.
+    setLastActionResult(modules().olb_core.create_project(specJson));
     refreshBoard();
-    setLastActionResult(result);
 }
 
 void OlbUiBackend::setCurrentProject(QString projectId)
 {
-    const QString result = modules().olb_core.set_current_project(projectId);
+    setLastActionResult(modules().olb_core.set_current_project(projectId));
     refreshBoard();
-    setLastActionResult(result);
 }
 
 void OlbUiBackend::createNote(QString title, QString body)
 {
-    const QString result = modules().olb_core.create_note(title, body);
+    setLastActionResult(modules().olb_core.create_note(title, body));
     refreshBoard();
-    setLastActionResult(result);
 }
 
 void OlbUiBackend::promoteNote(QString noteId, QString projectId, QString stage)
 {
-    const QString result = modules().olb_core.promote_note(noteId, projectId, stage);
+    setLastActionResult(modules().olb_core.promote_note(noteId, projectId, stage));
     refreshBoard();
-    setLastActionResult(result);
 }
 
 void OlbUiBackend::saveProfile(QString name, QString orcid)
 {
-    const QString result = modules().olb_core.set_profile(name, orcid);
+    setLastActionResult(modules().olb_core.set_profile(name, orcid));
     refreshBoard();
-    setLastActionResult(result);
 }
 
 void OlbUiBackend::refreshSessionStatus()

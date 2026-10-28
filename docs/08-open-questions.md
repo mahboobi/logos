@@ -268,6 +268,51 @@ attacker reads the science regardless. "Private project" is currently a claim
 about the network, not about the disk. Encrypting the store is a separate,
 larger change that was considered and deferred at the same time.
 
+### R21 — A synchronous core call from the UI thread can freeze it forever (found 28 Oct 2026)
+
+Observed on alice: `olb_ui`'s main thread blocked for **over six minutes** in
+
+```
+QRemoteObjectSourceIo::onServerRead          <- handling a SLOT from QML
+  OlbUiBackend::setCurrentProject
+    OlbCore::set_current_project(QString const&, logos::CallError*, Timeout)
+      qt_safe_poll                            <- parked here
+```
+
+while `olb_core` sat **idle** in `poll` at 0% CPU. So the request or its reply
+was lost in transport, not slow to compute.
+
+Two things matter about this.
+
+**The timeout does not fire.** `logos_mode.h` defines
+`explicit Timeout(int milliseconds = 20000)`, so the default is 20 s and the
+generated consumer passes it. The call was still parked after six minutes. A
+synchronous call issued from *inside* a QtRO event handler therefore does not
+honour its own deadline — it is re-entrant on the event loop it needs in order
+to receive the reply. Upstream bug; nothing in this repo can set a shorter
+deadline and expect it to be respected.
+
+**The blast radius is the whole UI**, because the blocked thread is the one
+that repaints. The visible symptom is wherever the UI last drew: on 28 Oct the
+"Create project" button read "Creating…" indefinitely, while the project itself
+had been written to disk minutes earlier (commit `51586aebdcb8`). The frozen
+control and the actual fault were in different code paths, which is worth
+remembering before believing any "X is stuck" report.
+
+**Not caused by the RLN log flood.** `liblogos_lez_rln_module` was writing
+`storage.json` ~35–68×/second and accounted for 96% of the log, which made it
+the obvious suspect. Killing it stopped the flood (line count frozen at
+24,901) and the UI stayed blocked in the same frame. Ruled out by experiment.
+
+**Mitigation available to us:** cut the number of synchronous round-trips per
+user action. `refreshBoard()` alone makes eight (`board`, `fixtures_enabled`,
+`notes`, `projects`, `profile`, `history`, `members`, `invites`), so every
+refresh is eight chances to wedge. One core method returning a combined
+document would reduce that exposure eightfold. Separately, a mutating action
+must publish its result **before** refreshing anything, so a hung refresh
+cannot also cost the person the outcome of work that already succeeded — that
+ordering was briefly the other way round and is corrected.
+
 ### R20 — Scaffold does not resolve a dependency's own dependencies (found 27 Oct 2026)
 
 `liblogos_rln_module` was captured in `scaffold.toml`, built, and installed into
