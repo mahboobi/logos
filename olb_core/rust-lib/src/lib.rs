@@ -1237,24 +1237,23 @@ impl OlbCoreModule for OlbCore {
             "stage": project_stage,
             "stageName": current
                 .as_ref()
-                .and_then(|p| p.get("stages"))
-                .and_then(|v| v.as_array())
-                .and_then(|a| a.get(project_stage - 1))
-                .and_then(|v| v.as_str())
-                .unwrap_or(STAGES[0]),
+                .map(olb_vcs::stages::stages_of)
+                .and_then(|v| v.get(project_stage - 1).cloned())
+                .unwrap_or_else(|| STAGES[0].to_string()),
             "stageNeeds": current
                 .as_ref()
-                .and_then(|p| p.get("stages"))
-                .and_then(|v| v.as_array())
-                .and_then(|a| a.get(project_stage - 1))
-                .and_then(|v| v.as_str())
-                .map(stage_needs)
+                .map(olb_vcs::stages::stages_of)
+                .and_then(|v| v.get(project_stage - 1).cloned())
+                .map(|n| stage_needs(&n))
                 .unwrap_or(""),
+            // Through stages_of, so an EMPTY stage list falls back to all six
+            // exactly as a missing one does. Reading the field directly here
+            // would hide the tracker on a project whose stages are [] while
+            // reached_stage still measured it against six.
             "stagesUsed": current
                 .as_ref()
-                .and_then(|p| p.get("stages"))
-                .cloned()
-                .unwrap_or_else(|| STAGES.iter().map(|s| serde_json::json!(s)).collect()),
+                .map(olb_vcs::stages::stages_of)
+                .unwrap_or_else(|| STAGES.iter().map(|s| s.to_string()).collect()),
             // Every project, for the sidebar list.
             "projects": projects.iter().map(|p| serde_json::json!({
                 "id": p.get("id").cloned().unwrap_or(serde_json::Value::Null),
