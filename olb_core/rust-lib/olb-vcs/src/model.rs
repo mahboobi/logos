@@ -102,6 +102,7 @@ pub enum Direction {
 /// Who acted. `kind` is required, and an agent must name the human who runs
 /// it — an unattributable agent action is the thing this prevents.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Actor {
     pub key: String,
     pub kind: ActorKind,
@@ -122,6 +123,7 @@ pub enum ActorKind {
 /// One guard result, recorded on the transition so a move can be audited
 /// later without re-deriving what was true at the time.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Check {
     pub rule: String,
     pub passed: bool,
@@ -131,6 +133,7 @@ pub struct Check {
 
 /// The payload of a `stage_transition` record.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct StageTransition {
     /// `None` only for the project's own creation.
     pub from: Option<Stage>,
@@ -172,6 +175,7 @@ pub enum RecordType {
 /// The shared envelope. `sig` is on the RECORD here, which is the structural
 /// difference from v1 (where only the commit carried a signature).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Envelope {
     pub id: String,
     #[serde(rename = "type")]
@@ -245,6 +249,7 @@ pub enum TeamSize {
 
 /// Project settings. Only `anchoring` is required.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Settings {
     pub anchoring: Anchoring,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -265,6 +270,7 @@ pub struct Settings {
 /// the thing that checks it. Keeping them as values means this crate does not
 /// have to re-state a grammar it cannot enforce better than the contract can.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RichDoc {
     pub format: RichFormat,
     pub blocks: Vec<serde_json::Value>,
@@ -282,6 +288,7 @@ pub enum RichFormat {
 /// forbids anything else — notably there is no `"type": "text"` tag, which
 /// is the obvious thing to add and is rejected.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Inline {
     pub text: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -328,6 +335,7 @@ impl RichDoc {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Reference {
     pub kind: ReferenceKind,
     pub identifier: String,
@@ -352,6 +360,7 @@ pub enum ReferenceKind {
 /// no `ideas`. The stage is derived from transitions (§1 rule 3), and work
 /// lives in its own records rather than nested inside the project.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ProjectFields {
     pub title: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -415,6 +424,7 @@ pub fn validate_stages(stages: &[Stage]) -> Result<(), StagesInvalid> {
 
 /// The payload of an `idea_contribution`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct IdeaContributionFields {
     pub kind: IdeaKind,
     pub body: RichDoc,
@@ -435,6 +445,7 @@ pub enum IdeaKind {
 
 /// The payload of a `membership`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct MembershipFields {
     pub member: String,
     pub name: String,
@@ -463,6 +474,100 @@ pub enum InviteKind {
     ByCode,
     JoinRequest,
     Creator,
+}
+
+/// One entry in a project's history (§6). Every write carries one, so the
+/// timeline is a projection of signed commits rather than a table anyone can
+/// edit.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HistoryEvent {
+    pub commit: String,
+    pub at: String,
+    pub actor: Actor,
+    pub action: Action,
+    pub stage: Stage,
+    pub target: Target,
+    /// Which protocol the work went through, when it went through one. This
+    /// is what makes "who contributed where" answerable per protocol (§6).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub protocol: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+    pub anchor: Anchor,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Target {
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Anchor {
+    pub state: AnchorState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub batch: Option<u64>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AnchorState {
+    Pending,
+    Anchored,
+}
+
+impl Anchor {
+    /// Every event starts unanchored. Claiming otherwise before a receipt is
+    /// exactly the mistake R12 recorded: a tx_hash is not a receipt.
+    pub fn pending() -> Anchor {
+        Anchor { state: AnchorState::Pending, batch: None }
+    }
+}
+
+/// What happened, from the schema's closed list of 32 actions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Action {
+    ProjectCreated,
+    SettingsChanged,
+    MemberInvited,
+    MemberJoined,
+    MemberRoleChanged,
+    MemberRemoved,
+    JoinRequested,
+    JoinDecided,
+    StageMoved,
+    IdeaContributed,
+    HypothesisEdited,
+    HypothesisReviewed,
+    HypothesisCommitted,
+    HypothesisRevealed,
+    GrantDrafted,
+    GrantOpened,
+    PledgeMade,
+    MilestoneDecided,
+    MilestoneReleased,
+    GrantClosed,
+    ProtocolDrafted,
+    ProtocolPublished,
+    ProtocolClosed,
+    SubmissionAdded,
+    SubmissionCorrected,
+    SubmissionReviewed,
+    SnapshotFrozen,
+    AnalysisEdited,
+    ManuscriptEdited,
+    ManuscriptReady,
+    PaperPublished,
+    CreditResponded,
 }
 
 // ---------------------------------------------------------------------------
@@ -1137,6 +1242,126 @@ mod tests {
         assert!(v.get("crdt_state").is_none(), "omitted when absent");
         let back: RichDoc = serde_json::from_value(v).unwrap();
         assert_eq!(back, d);
+    }
+
+    // ---- history events (§6) ----
+
+    fn event() -> HistoryEvent {
+        HistoryEvent {
+            commit: "a41c9e2".into(),
+            at: "2026-10-28T13:10:00Z".into(),
+            actor: Actor {
+                key: "dd028f673cc71c456c1eb6b253bf5a3b894a6fe6172d7391ce49ba440c205b33".into(),
+                kind: ActorKind::Member,
+                name: Some("Imtiyaz".into()),
+                operator: None,
+            },
+            action: Action::StageMoved,
+            stage: Stage::Hypothesis,
+            target: Target {
+                kind: "project".into(),
+                id: "olb:proj:bkvglqcziuv4ig45".into(),
+                title: Some("Bird Spotting".into()),
+                version: None,
+            },
+            protocol: None,
+            detail: Some("Idea complete".into()),
+            anchor: Anchor::pending(),
+        }
+    }
+
+    fn validate_history(v: &serde_json::Value) {
+        let schema = model_schema();
+        let id = schema["$id"].as_str().unwrap().to_string();
+        let wrapper = json!({"$ref": format!("{id}#/$defs/historyEvent")});
+        // The event schema is reached by pointer, so the document itself has
+        // to be retrievable by its own $id.
+        struct Me(serde_json::Value, String);
+        impl jsonschema::Retrieve for Me {
+            fn retrieve(
+                &self,
+                uri: &jsonschema::Uri<String>,
+            ) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+                if uri.as_str() == self.1 {
+                    return Ok(self.0.clone());
+                }
+                let name = uri.as_str().rsplit('/').next().unwrap_or_default();
+                let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../schemas/");
+                Ok(serde_json::from_str(&std::fs::read_to_string(format!("{dir}{name}"))?)?)
+            }
+        }
+        let v8 = jsonschema::options()
+            .with_retriever(Me(schema.clone(), id))
+            .build(&wrapper)
+            .expect("history schema did not compile");
+        let errs: Vec<String> = v8.iter_errors(v).map(|e| format!("{}: {e}", e.instance_path())).collect();
+        assert!(errs.is_empty(), "history event rejected:\n  {}", errs.join("\n  "));
+    }
+
+    #[test]
+    fn our_history_event_validates_against_the_schema() {
+        validate_history(&serde_json::to_value(event()).unwrap());
+    }
+
+    #[test]
+    fn every_action_name_is_snake_case_on_the_wire() {
+        assert_eq!(serde_json::to_value(Action::StageMoved).unwrap(), json!("stage_moved"));
+        assert_eq!(serde_json::to_value(Action::PaperPublished).unwrap(), json!("paper_published"));
+        assert_eq!(serde_json::to_value(Action::CreditResponded).unwrap(), json!("credit_responded"));
+        // All 32 must be accepted by the schema's enum.
+        let allowed = model_schema()["$defs"]["historyEvent"]["properties"]["action"]["enum"]
+            .as_array().unwrap().iter().map(|v| v.as_str().unwrap().to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(allowed.len(), 32, "the schema lists 32 actions");
+        for a in [Action::ProjectCreated, Action::SettingsChanged, Action::MemberInvited,
+                  Action::MemberJoined, Action::MemberRoleChanged, Action::MemberRemoved,
+                  Action::JoinRequested, Action::JoinDecided, Action::StageMoved,
+                  Action::IdeaContributed, Action::HypothesisEdited, Action::HypothesisReviewed,
+                  Action::HypothesisCommitted, Action::HypothesisRevealed, Action::GrantDrafted,
+                  Action::GrantOpened, Action::PledgeMade, Action::MilestoneDecided,
+                  Action::MilestoneReleased, Action::GrantClosed, Action::ProtocolDrafted,
+                  Action::ProtocolPublished, Action::ProtocolClosed, Action::SubmissionAdded,
+                  Action::SubmissionCorrected, Action::SubmissionReviewed, Action::SnapshotFrozen,
+                  Action::AnalysisEdited, Action::ManuscriptEdited, Action::ManuscriptReady,
+                  Action::PaperPublished, Action::CreditResponded] {
+            let name = serde_json::to_value(a).unwrap().as_str().unwrap().to_string();
+            assert!(allowed.contains(&name), "{name} is not in the schema's action enum");
+        }
+    }
+
+    #[test]
+    fn an_event_starts_unanchored() {
+        let v = serde_json::to_value(Anchor::pending()).unwrap();
+        assert_eq!(v, json!({"state": "pending"}), "batch omitted until anchored");
+    }
+
+    // ---- strict parsing ----
+    //
+    // The schema says additionalProperties: false. serde should agree at
+    // PARSE time, so a record from a peer carrying an unexpected field is
+    // refused before anything acts on it, rather than silently ignored.
+
+    #[test]
+    fn an_unknown_field_is_refused_when_parsing() {
+        let good = json!({"key": "a".repeat(64), "kind": "member"});
+        assert!(serde_json::from_value::<Actor>(good).is_ok());
+
+        let sneaky = json!({"key": "a".repeat(64), "kind": "member", "role": "admin"});
+        let err = serde_json::from_value::<Actor>(sneaky).unwrap_err().to_string();
+        assert!(err.contains("role"), "expected the unknown field named, got: {err}");
+    }
+
+    #[test]
+    fn an_unknown_field_in_a_payload_is_refused_too() {
+        let v = json!({
+            "title": "x", "privacy": "open",
+            "stages_enabled": ["idea", "published"],
+            "settings": {"anchoring": "batched"},
+            "stage": 2
+        });
+        let err = serde_json::from_value::<ProjectFields>(v).unwrap_err().to_string();
+        assert!(err.contains("stage"),
+                "a v1 `stage` field must not be quietly accepted: {err}");
     }
 
     /// An agent author without its operator must be rejected — the schema

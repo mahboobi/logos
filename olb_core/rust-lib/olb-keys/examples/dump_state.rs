@@ -83,4 +83,21 @@ fn main() {
         }
         Err(e) => println!("records: UNREADABLE: {e}"),
     }
+
+    // Identity last: the store can be emptied deliberately, but an identity
+    // that will not open blocks the next launch entirely, and it is the one
+    // file here that cannot be regenerated — a node that changes its author
+    // key orphans every commit it ever signed.
+    match vault::read_sealed(&dir.join("identity.olbk"), &key, "olb.identity.vault.v1") {
+        Ok(Some(b)) => {
+            let v: serde_json::Value = serde_json::from_slice(&b).unwrap_or_default();
+            println!(
+                "identity: OPENS  name={:?} orcid={:?}",
+                v.get("name").and_then(|x| x.as_str()).unwrap_or(""),
+                v.get("orcid").and_then(|x| x.as_str()).unwrap_or("-"),
+            );
+        }
+        Ok(None) => println!("identity: absent (a new one will be minted on next open)"),
+        Err(e) => println!("identity: UNREADABLE with this key: {e}"),
+    }
 }
